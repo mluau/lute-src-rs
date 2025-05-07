@@ -41,12 +41,54 @@ fn main() {
 
     //panic!("Cannot build lute runtime yet, please run `cargo build` manually");
     
+    // Configure C++
+    let mut config = cc::Build::new();
+    config
+        .warnings(false)
+        .cargo_metadata(false)
+        .std("c++17")
+        .cpp(true);
+
+    let target = std::env::var("TARGET").unwrap();
+
+    if target.ends_with("emscripten") {
+        // Enable c++ exceptions for emscripten (it's disabled by default)
+        // Later we should switch to wasm exceptions
+        config.flag_if_supported("-fexceptions");
+    }
+
     let dst = Config::new("lute")
         .define("LUAU_EXTERN_C", "ON")
         .define("LUAU_STATIC_CRT", "ON")
+        .define("LUAU_BUILD_STATIC", "ON")
+        .cxxflag("-DLUAI_MAXCSTACK=1000000")
+        .init_cxx_cfg(config)
         .no_build_target(true)
         .build();
+    
+    // Custom is a special library that needs to be built manually and linked in as well
+    cc::Build::new()
+        .cpp(true)
+        .file("Custom/src/lextra.cpp")
+        .file("Custom/src/lflags.cpp")
+        .include("lute/extern/luau/VM/include")
+        .include("lute/extern/luau/VM/src")
+        .include("lute/extern/luau/Common/include")
+        .include("lute/extern/luau/Compiler/include")
+        .compile("Luau.Custom");
 
+    // Also build LuteExt  
+    cc::Build::new()
+        .cpp(true)
+        .file("LuteExt/src/lopen.cpp")
+        .include("lute/time/include")
+        .include("lute/extern/luau/VM/include")
+        .include("lute/extern/luau/VM/src")
+        .include("lute/extern/luau/Common/include")
+        .include("lute/extern/luau/Compiler/include")
+        .compile("Luau.LuteExt");
+
+    println!("cargo:rustc-link-lib=dylib=stdc++");
     println!("cargo:rustc-link-search=native={}/build", dst.display());
     println!("cargo:rustc-link-search=native={}/build/extern/luau", dst.display());
     
@@ -54,6 +96,7 @@ fn main() {
     println!("cargo:rustc-link-lib=static=Luau.Ast");
     println!("cargo:rustc-link-lib=static=Luau.CodeGen");
     println!("cargo:rustc-link-lib=static=Luau.Config");
+    println!("cargo:rustc-link-lib=static=Luau.Compiler");
     println!("cargo:rustc-link-lib=static=Luau.EqSat");
     println!("cargo:rustc-link-lib=static=Luau.Require");
     println!("cargo:rustc-link-lib=static=Luau.RequireNavigator");
