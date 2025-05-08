@@ -213,6 +213,7 @@ mod tests {
             assert!(!state2.is_null());
 
             lutec_destroy_runtime(state);
+            lua_close(state);
         }
     }
 
