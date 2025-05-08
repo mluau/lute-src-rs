@@ -28,9 +28,8 @@ extern "C" {
     pub fn lua_close(state: *mut c_void);
     pub fn luaL_openlibs(state: *mut c_void);
     pub fn lutec_opentime(state: *mut c_void) -> c_int;
-    pub fn lutec_setup_runtime(state: *mut c_void);
+    pub fn lutec_setup_runtime(state: *mut c_void, data_copy_state: *mut c_void);
     pub fn lutec_destroy_runtime(state: *mut c_void) -> c_int;
-    pub fn lutec_get_data_copy(state: *mut c_void) -> *mut c_void;
     pub fn lua_gettop(state: *mut c_void) -> c_int;
     pub fn lua_getfield(state: *mut c_void, index: c_int, k: *const c_char) -> c_int;
     pub fn lua_setfield(state: *mut c_void, index: c_int, k: *const c_char);
@@ -151,7 +150,8 @@ mod tests {
         println!("Running Luau tests...");
         unsafe {
             let state = luaL_newstate();
-            lutec_setup_runtime(state);
+            let data_copy_state = luaL_newstate();
+            lutec_setup_runtime(state, data_copy_state);
             assert!(!state.is_null());
             println!("state: {:?}", state);
             println!("gettop: {}", lua_gettop(state));
@@ -209,11 +209,11 @@ mod tests {
 
             assert_eq!(lua_tointegerx(state, -1, ptr::null_mut()), 5);
 
-            let state2 = lutec_get_data_copy(state);
-            assert!(!state2.is_null());
+            assert!(!data_copy_state.is_null());
 
             lutec_destroy_runtime(state);
             lua_close(state);
+            lua_close(data_copy_state);
         }
     }
 

@@ -17,17 +17,9 @@ extern "C" int lutec_opentask(lua_State *L)
 }
 
 // Wrapper to load the Lute runtime into the Lua state returning the created state
-extern "C" void lutec_setup_runtime(lua_State *L)
+extern "C" void lutec_setup_runtime(lua_State *L, lua_State *DC)
 {
     Runtime *runtime = new Runtime();
-
-    // Separate VM for data copies
-    lua_State *DC = luaL_newstate();
-    if (DC == nullptr)
-    {
-        luaL_error(L, "Failed to create data copy state");
-        return;
-    }
 
     runtime->dataCopy.reset(DC);
 
@@ -36,27 +28,6 @@ extern "C" void lutec_setup_runtime(lua_State *L)
 
     lua_setthreaddata(L, runtime);
     return;
-}
-
-// Get the data copy state from the runtime
-extern "C" lua_State *lutec_get_data_copy(lua_State *L)
-{
-    Runtime *runtime = static_cast<Runtime *>(lua_getthreaddata(L));
-    if (runtime && runtime->dataCopy)
-    {
-        return runtime->dataCopy.get();
-    }
-
-    if (runtime)
-    {
-        printf("Lute runtime data copy not found\n");
-    }
-    else
-    {
-        printf("Lute runtime not found\n");
-    }
-
-    return nullptr;
 }
 
 // Wrapper to destroy the Lute runtime inside the lua_State
@@ -79,14 +50,6 @@ extern "C" int lutec_destroy_runtime(lua_State *L)
         if (runtime->dataCopy)
         {
             printf("Lute runtime data copy found\n");
-            lua_State *DC = runtime->dataCopy.get();
-            printf("Closed dataCopy on runtime");
-            printf("Pointer to dataCopy: %p\n", DC);
-            if (DC != nullptr)
-            {
-                lua_close(DC);
-            }
-            printf("Lute runtime data copy closed\n");
             runtime->dataCopy.release();
             printf("Lute runtime data copy released\n");
         }
