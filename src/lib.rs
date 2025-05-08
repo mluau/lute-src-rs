@@ -9,10 +9,6 @@ pub fn build_lute() {
     // This is needed to run the luthier.py script
     println!("Current directory: {}", std::env::current_dir().unwrap().display());
 
-    for (k, v) in std::env::vars() {
-        println!("{} -> {}", k, v);
-    }
-
     // Check that python is installed, error if not. This is needed
     // for luthier.py to fetch dependencies
     if std::process::Command::new("python3")
@@ -87,14 +83,29 @@ pub fn build_lute() {
         .compile("Luau.Custom");
 
     // Also build LuteExt  
-    cc::Build::new()
+
+    /*
+    target_compile_definitions(Luau.VM PUBLIC LUA_USE_LONGJMP=1)
+    target_compile_definitions(Luau.VM PUBLIC LUA_API=extern\"C\")
+    target_compile_definitions(Luau.Compiler PUBLIC LUACODE_API=extern\"C\")
+    target_compile_definitions(Luau.CodeGen PUBLIC LUACODEGEN_API=extern\"C\")
+    */
+
+    cc::Build::new() 
         .cpp(true)
         .file("LuteExt/src/lopen.cpp")
         .include("lute/time/include")
+        .include("lute/task/include")
+        .include("lute/runtime/include")
         .include("lute/extern/luau/VM/include")
         .include("lute/extern/luau/VM/src")
         .include("lute/extern/luau/Common/include")
         .include("lute/extern/luau/Compiler/include")
+        .flag("-DLUA_USE_LONGJMP=1")
+        .flag("-DLUA_API=extern \"C\"")
+        .flag("-DLUACODE_API=extern \"C\"")
+        .flag("-DLUACODEGEN_API=extern \"C\"")
+        .flag("-DLUAI_MAXCSTACK=1000000")
         .compile("Luau.LuteExt");
 
     println!("cargo:rustc-link-lib=dylib=stdc++");
@@ -132,7 +143,15 @@ pub fn build_lute() {
 
     // curl
     println!("cargo:rustc-link-search=native={}/build/extern/curl/lib", dst.display());
-    println!("cargo:rustc-link-lib=static=curl-d");
+    
+    // Debug
+    let binding = Config::new("lute");
+    let profile = binding.get_profile();
+    if profile == "Debug" {
+        println!("cargo:rustc-link-lib=static=curl-d");
+    } else {
+        println!("cargo:rustc-link-lib=static=curl");
+    }
 
     // libuv
     println!("cargo:rustc-link-search=native={}/build/extern/libuv", dst.display());

@@ -28,6 +28,10 @@ extern "C" {
     pub fn lua_close(state: *mut c_void);
     pub fn luaL_openlibs(state: *mut c_void);
     pub fn lutec_opentime(state: *mut c_void) -> c_int;
+    pub fn lutec_setup_runtime(state: *mut c_void);
+    pub fn lutec_destroy_runtime(state: *mut c_void) -> c_int;
+    pub fn lutec_get_data_copy(state: *mut c_void) -> *mut c_void;
+    pub fn lua_gettop(state: *mut c_void) -> c_int;
     pub fn lua_getfield(state: *mut c_void, index: c_int, k: *const c_char) -> c_int;
     pub fn lua_setfield(state: *mut c_void, index: c_int, k: *const c_char);
     pub fn lua_tolstring(state: *mut c_void, index: c_int, len: *mut c_long) -> *const c_char;
@@ -147,7 +151,10 @@ mod tests {
         println!("Running Luau tests...");
         unsafe {
             let state = luaL_newstate();
+            lutec_setup_runtime(state);
             assert!(!state.is_null());
+            println!("state: {:?}", state);
+            println!("gettop: {}", lua_gettop(state));
             
             // Enable JIT if supported
             #[cfg(not(target_os = "emscripten"))]
@@ -157,6 +164,7 @@ mod tests {
 
             luaL_openlibs(state);
             lutec_opentime(state);
+
             // lutec_opentime pushes the time module to the stack
             // Now, we need to register it in the global table
             lua_setglobal(state, c"time".as_ptr());
@@ -201,7 +209,10 @@ mod tests {
 
             assert_eq!(lua_tointegerx(state, -1, ptr::null_mut()), 5);
 
-            lua_close(state);
+            let state2 = lutec_get_data_copy(state);
+            assert!(!state2.is_null());
+
+            lutec_destroy_runtime(state);
         }
     }
 
