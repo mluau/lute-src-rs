@@ -27,6 +27,14 @@ extern "C" {
     pub fn luaL_newstate() -> *mut c_void;
     pub fn lua_close(state: *mut c_void);
     pub fn luaL_openlibs(state: *mut c_void);
+    pub fn lutec_opencrypto(state: *mut c_void);
+    pub fn lutec_openfs(state: *mut c_void);
+    pub fn lutec_openluau(state: *mut c_void);
+    pub fn lutec_opennet(state: *mut c_void);
+    pub fn lutec_openprocess(state: *mut c_void);
+    pub fn lutec_opentask(state: *mut c_void);
+    pub fn lutec_openvm(state: *mut c_void);
+    pub fn lutec_opensystem(state: *mut c_void);
     pub fn lutec_opentime(state: *mut c_void) -> c_int;
     pub fn lutec_setup_runtime(state: *mut c_void, data_copy_state: *mut c_void);
     pub fn lutec_destroy_runtime(state: *mut c_void) -> c_int;
@@ -146,8 +154,8 @@ mod tests {
     }
 
     #[test]
-    fn test_lute_opentime() {
-        println!("Running Luau tests...");
+    fn test_lute_open() {
+        println!("Running Lute tests...");
         unsafe {
             let state = luaL_newstate();
             let data_copy_state = luaL_newstate();
@@ -163,10 +171,43 @@ mod tests {
             }
 
             luaL_openlibs(state);
-            lutec_opentime(state);
 
-            // lutec_opentime pushes the time module to the stack
-            // Now, we need to register it in the global table
+                /*
+        {"@lute/crypto", luteopen_crypto},
+        {"@lute/fs", luteopen_fs},
+        {"@lute/luau", luteopen_luau},
+        {"@lute/net", luteopen_net},
+        {"@lute/process", luteopen_process},
+        {"@lute/task", luteopen_task},
+        {"@lute/vm", luteopen_vm},
+        {"@lute/system", luteopen_system},
+        {"@lute/time", luteopen_time},
+    */
+            lutec_opencrypto(state);
+            lua_setglobal(state, c"crypto".as_ptr());
+
+            lutec_openfs(state);
+            lua_setglobal(state, c"fs".as_ptr());
+
+            lutec_openluau(state);
+            lua_setglobal(state, c"luau".as_ptr());
+
+            lutec_opennet(state);
+            lua_setglobal(state, c"net".as_ptr());
+
+            lutec_openprocess(state);
+            lua_setglobal(state, c"process".as_ptr());
+
+            lutec_opentask(state);
+            lua_setglobal(state, c"task".as_ptr());
+
+            lutec_openvm(state);
+            lua_setglobal(state, c"vm".as_ptr());
+
+            lutec_opensystem(state);
+            lua_setglobal(state, c"system".as_ptr());
+
+            lutec_opentime(state);
             lua_setglobal(state, c"time".as_ptr());
 
             lua_getglobal(state, c"_VERSION".as_ptr());

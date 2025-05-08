@@ -2,18 +2,96 @@
 
 #include "lute/time.h"
 #include "lute/task.h"
+#include "lute/crypto.h"
+#include "lute/fs.h"
+#include "lute/luau.h"
+#include "lute/net.h"
+#include "lute/process.h"
+#include "lute/vm.h"
+#include "lute/system.h"
 #include "lute/runtime.h"
 
-// Wrapper to expose luteopen_time as a C function
+/*
+static void luteopen_lib(lua_State *L, const char *name)
+{
+    std::unordered_map<const char *, lua_CFunction> libs = {{
+        {"@lute/crypto", luteopen_crypto},
+        {"@lute/fs", luteopen_fs},
+        {"@lute/luau", luteopen_luau},
+        {"@lute/net", luteopen_net},
+        {"@lute/process", luteopen_process},
+        {"@lute/task", luteopen_task},
+        {"@lute/vm", luteopen_vm},
+        {"@lute/system", luteopen_system},
+        {"@lute/time", luteopen_time},
+    }};
+}*/
+
+extern "C" int lutec_opencrypto(lua_State *L)
+{
+    return luteopen_crypto(L);
+}
+
+extern "C" int lutec_openfs(lua_State *L)
+{
+    return luteopen_fs(L);
+}
+
+extern "C" int lutec_openluau(lua_State *L)
+{
+    return luteopen_luau(L);
+}
+
+extern "C" int lutec_opennet(lua_State *L)
+{
+    return luteopen_net(L);
+}
+
+extern "C" int lutec_openprocess(lua_State *L)
+{
+    return luteopen_process(L);
+}
+
+extern "C" int lutec_opentask(lua_State *L)
+{
+    return luteopen_task(L);
+}
+
+extern "C" int lutec_openvm(lua_State *L)
+{
+    return luteopen_vm(L);
+}
+
+extern "C" int lutec_opensystem(lua_State *L)
+{
+    return luteopen_vm(L);
+}
+
 extern "C" int lutec_opentime(lua_State *L)
 {
     return luteopen_time(L);
 }
 
-// Wrapper to expose luteopen_time as a C function
-extern "C" int lutec_opentask(lua_State *L)
+// Needed for Lute.VM to link right now
+lua_State *setupState(Runtime &runtime)
 {
-    return luteopen_task(L);
+    // Separate VM for data copies
+    runtime.dataCopy.reset(luaL_newstate());
+
+    runtime.globalState.reset(luaL_newstate());
+
+    lua_State *L = runtime.globalState.get();
+
+    runtime.GL = L;
+
+    lua_setthreaddata(L, &runtime);
+
+    // register the builtin tables
+    luaL_openlibs(L);
+
+    luaL_sandbox(L);
+
+    return L;
 }
 
 // Wrapper to load the Lute runtime into the Lua state returning the created state

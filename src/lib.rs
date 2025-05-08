@@ -66,6 +66,7 @@ pub fn build_lute() {
         .define("LUAU_EXTERN_C", "ON")
         .define("LUAU_STATIC_CRT", "ON")
         .define("LUAU_BUILD_STATIC", "ON")
+        .define("WITH_ZLIB", "OFF")
         .cxxflag("-DLUAI_MAXCSTACK=1000000")
         .init_cxx_cfg(config)
         .no_build_target(true)
@@ -94,8 +95,15 @@ pub fn build_lute() {
     cc::Build::new() 
         .cpp(true)
         .file("LuteExt/src/lopen.cpp")
-        .include("lute/time/include")
+        .include("lute/crypto/include")
+        .include("lute/fs/include")
+        .include("lute/luau/include")
+        .include("lute/net/include")
+        .include("lute/process/include")
+        .include("lute/system/include")
+        .include("lute/vm/include")
         .include("lute/task/include")
+        .include("lute/time/include")
         .include("lute/runtime/include")
         .include("lute/extern/luau/VM/include")
         .include("lute/extern/luau/VM/src")
@@ -117,6 +125,7 @@ pub fn build_lute() {
     println!("cargo:rustc-link-lib=static=Luau.CodeGen");
     println!("cargo:rustc-link-lib=static=Luau.Config");
     println!("cargo:rustc-link-lib=static=Luau.Compiler");
+    println!("cargo:rustc-link-lib=static=Luau.CLI.lib");
     println!("cargo:rustc-link-lib=static=Luau.EqSat");
     println!("cargo:rustc-link-lib=static=Luau.Require");
     println!("cargo:rustc-link-lib=static=Luau.RequireNavigator");
@@ -156,5 +165,7 @@ pub fn build_lute() {
     // libuv
     println!("cargo:rustc-link-search=native={}/build/extern/libuv", dst.display());
     println!("cargo:rustc-link-lib=static=uv");
+
+    // zlib (system)
 }
 
