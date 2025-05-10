@@ -449,7 +449,6 @@ mod tests {
             lua_close(data_copy_state);
 
             std::io::stdout().flush().unwrap();
-            std::thread::sleep(std::time::Duration::from_secs(1));
         }
     }
 
