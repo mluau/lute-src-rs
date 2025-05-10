@@ -10,6 +10,70 @@
 #include "lute/vm.h"
 #include "lute/system.h"
 #include "lute/runtime.h"
+#include "uv.h"
+
+typedef struct
+{
+    lua_State *L;
+} lua_State_wrapper;
+
+struct lutec_setupState
+{
+    // Returns a new lua_State that has been setup by the caller
+    void (*setup_lua_state)(lua_State_wrapper *L);
+};
+
+// Populates function pointers in the given lute_setupState.
+typedef void (*lutec_setupState_init)(lutec_setupState *config);
+
+static lutec_setupState *lutec_setup = nullptr;
+
+extern "C" int lutec_set_runtimeinitter(lutec_setupState_init config_init)
+{
+    printf("lutec_set_runtimeinitter called\n");
+    if (lutec_setup)
+    {
+        printf("ERROR: lutec_set_runtimeinitter called after setup\n");
+        return -1; // Cannot modify the setup state after it has been set
+    }
+    if (!config_init)
+    {
+        printf("ERROR: lutec_set_runtimeinitter called with null config_init\n");
+        return -2; // Invalid setup state
+    }
+
+    printf("Creating new lutec_setupState\n");
+    lutec_setupState *lute_setup_ptr = new lutec_setupState();
+
+    config_init(lute_setup_ptr); // SAFETY: lute_setup is allocated on the heap
+
+    if (lute_setup_ptr->setup_lua_state == nullptr)
+    {
+        printf("ERROR: lutec_set_runtimeinitter called with null setup_lua_state\n");
+        delete lute_setup_ptr;
+        lute_setup_ptr = nullptr;
+        return -3; // Invalid setup state
+    }
+    lutec_setup = lute_setup_ptr;
+    printf("lutec_set_runtimeinitter callback done\n");
+    // Test by calling the setup_lua_state function
+    lua_State_wrapper *lua_state_wrapper = new lua_State_wrapper();
+
+    lutec_setup->setup_lua_state(lua_state_wrapper);
+
+    lua_State *L = lua_state_wrapper->L;
+    if (L == nullptr)
+    {
+        printf("ERROR: setup_lua_state returned null lua_State\n");
+        delete lute_setup_ptr;
+        lutec_setup = nullptr;
+        return -5; // Invalid setup state
+    }
+
+    printf("lutec_set_runtimeinitter done\n");
+
+    return 0;
+}
 
 /*
 static void luteopen_lib(lua_State *L, const char *name)
@@ -72,15 +136,41 @@ extern "C" int lutec_opentime(lua_State *L)
     return luteopen_time(L);
 }
 
-// Needed for Lute.VM to link right now
-lua_State *setupState(Runtime &runtime)
+// Needed for Lute.VM
+lua_State *setupState(Runtime &runtime, lua_State *parent_th)
 {
+    printf("setupState called\n");
+
+    // Make data copy VM
+    lua_State_wrapper *lua_state_wrapper = new lua_State_wrapper();
+
+    lutec_setup->setup_lua_state(lua_state_wrapper);
+
+    lua_State *DC = lua_state_wrapper->L;
+    if (DC == nullptr)
+    {
+        printf("ERROR: setup_lua_state returned null DC\n");
+        delete lua_state_wrapper;
+        return nullptr; // Invalid setup state
+    }
+
     // Separate VM for data copies
-    runtime.dataCopy.reset(luaL_newstate());
+    runtime.dataCopy.reset(DC);
 
-    runtime.globalState.reset(luaL_newstate());
+    // Create the main VM
+    lua_State_wrapper *lua_state_wrapper_main = new lua_State_wrapper();
+    lutec_setup->setup_lua_state(lua_state_wrapper_main);
+    lua_State *L = lua_state_wrapper_main->L;
+    if (L == nullptr)
+    {
+        printf("ERROR: setup_lua_state returned null L\n");
+        delete lua_state_wrapper_main;
+        return nullptr; // Invalid setup state
+    }
 
-    lua_State *L = runtime.globalState.get();
+    runtime.globalState.reset(L);
+
+    L = runtime.globalState.get();
 
     runtime.GL = L;
 
@@ -91,6 +181,31 @@ lua_State *setupState(Runtime &runtime)
 
     luaL_sandbox(L);
 
+    // Store the newly created runtime in `parent`
+    lua_State *parent = lua_mainthread(parent_th);
+
+    // Create __CHILD_VMS__ table in the parent VM if it does not exist
+
+    lua_pushstring(parent, "___CHILD_VMS___");
+    lua_gettable(parent, LUA_REGISTRYINDEX);
+    if (lua_isnil(parent, -1))
+    {
+        // Create the table
+        lua_pop(parent, 1);
+        lua_createtable(parent, 0, 0);
+        lua_pushstring(parent, "___CHILD_VMS___");
+        lua_pushvalue(parent, -2);
+        lua_settable(parent, LUA_REGISTRYINDEX);
+        lua_pop(parent, 1); // Pop the table at index -1 which is the table we want to use
+    }
+
+    // Store the new runtime in the table
+    lua_pushstring(parent, "___CHILD_VMS___");
+    lua_gettable(parent, LUA_REGISTRYINDEX);
+    lua_pushvalue(parent, -2);
+    lua_pushlightuserdata(parent, &runtime);
+    lua_settable(parent, -3);
+    lua_pop(parent, 1); // Pop the table
     return L;
 }
 
@@ -113,11 +228,77 @@ extern "C" int lutec_destroy_runtime(lua_State *L)
 {
     Runtime *runtime = static_cast<Runtime *>(lua_getthreaddata(L));
 
+    lua_gc(L, LUA_GCCOLLECT, 2);
+    lua_gc(L, LUA_GCCOLLECT, 2);
+    lua_gc(L, LUA_GCCOLLECT, 0);
+    lua_gc(L, LUA_GCCOLLECT, 0);
+    lua_gc(L, LUA_GCCOLLECT, 0);
+
     printf("Destroying Lute runtime\n");
 
     if (runtime)
     {
         printf("Lute runtime found\n");
+
+        runtime->stop.store(true);
+
+        // Look for children
+        lua_pushstring(L, "___CHILD_VMS___");
+        lua_gettable(L, LUA_REGISTRYINDEX);
+        if (lua_istable(L, -1))
+        {
+            // Iterate over the table and destroy all
+            std::vector<Runtime *> children;
+            printf("Lute runtime has child VMs\n");
+            lua_pushnil(L);
+            while (lua_next(L, -2) != 0)
+            {
+                printf("Child VM found\n");
+                // Get the child VM
+                Runtime *child = static_cast<Runtime *>(lua_tolightuserdata(L, -1));
+                if (child)
+                {
+                    children.push_back(child);
+                }
+                lua_pop(L, 1);
+            }
+
+            // Remove the child VMs table
+            lua_pop(L, 1); // Pop the table
+            lua_pushstring(L, "___CHILD_VMS___");
+            lua_pushnil(L);
+            lua_settable(L, LUA_REGISTRYINDEX); // Remove the table from the registry
+            lua_pop(L, 1);                      // Pop the nil value
+
+            for (auto child : children)
+            {
+                {
+                    child->stop.store(true);
+                    child->runLoopCv.notify_one();
+                    std::unique_lock lock(child->continuationMutex); // Wait to all continuations to finish
+                }
+
+                printf("Destroying child VM\n");
+                child->stop.store(true);
+                printf("Child VM closed\n");
+
+                if (child->runLoopThread.joinable())
+                {
+                    child->runLoopCv.notify_one();
+                    child->runLoopThread.join();
+                    printf("Child VM thread joined\n");
+                }
+                else
+                {
+                    printf("Child VM thread not joinable\n");
+                }
+
+                // delete child;
+                lua_close(child->dataCopy.get());
+                child->dataCopy.release();
+                lua_close(child->GL);
+            }
+        }
 
         if (runtime->globalState)
         {
@@ -133,9 +314,18 @@ extern "C" int lutec_destroy_runtime(lua_State *L)
         }
 
         printf("Lute runtime data copy deleted\n");
+
         lua_setthreaddata(L, nullptr);
         delete runtime;
         printf("Lute runtime global state deleted\n");
+
+        // Run 2 gc cycles to clean up the memory
+        lua_gc(L, LUA_GCCOLLECT, 2);
+        lua_gc(L, LUA_GCCOLLECT, 2);
+        lua_gc(L, LUA_GCCOLLECT, 0);
+        lua_gc(L, LUA_GCCOLLECT, 0);
+        lua_gc(L, LUA_GCCOLLECT, 0);
+
         return 0;
     }
     else
@@ -145,8 +335,12 @@ extern "C" int lutec_destroy_runtime(lua_State *L)
 }
 
 // Wrapper to run one iteration of the Lute scheduler
-extern "C" int lutec_run_once(Runtime *runtime)
+int lutec_run_once_internal(Runtime *runtime)
 {
+    uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+
+    // luaL_error(runtime->GL, "Lute scheduler run_once called without a runtime");
+
     // Complete all C++ continuations
     std::vector<std::function<void()>> copy;
 
@@ -157,10 +351,19 @@ extern "C" int lutec_run_once(Runtime *runtime)
     }
 
     for (auto &&continuation : copy)
+    {
+        printf("Running continuation\n");
         continuation();
+    }
 
     if (runtime->runningThreads.empty())
-        return 0;
+    {
+        printf("No threads to run\n");
+        // Push code 1000 to indicate nothing to run
+        lua_pushinteger(runtime->GL, 1000);
+        lua_pushnil(runtime->GL);
+        return 2;
+    }
 
     // Run the next thread
     auto next = std::move(runtime->runningThreads.front());
@@ -171,6 +374,7 @@ extern "C" int lutec_run_once(Runtime *runtime)
 
     if (L == nullptr)
     {
+        printf("ERROR: Cannot resume a non-thread reference\n");
         luaL_error(runtime->GL, "Cannot resume a non-thread reference");
         return -1;
     }
@@ -180,15 +384,22 @@ extern "C" int lutec_run_once(Runtime *runtime)
 
     int status = LUA_OK;
 
+    printf("Running thread %p\n", L);
+
     if (!next.success)
         status = lua_resumeerror(L, nullptr);
     else
         status = lua_resume(L, nullptr, next.argumentCount);
 
+    printf("Thread %p finished with status %d\n", L, status);
+
     if (status == LUA_YIELD)
     {
         // Yielding, continue to next iteration
-        return 0;
+        printf("Thread yielded\n");
+        lua_pushinteger(L, LUA_YIELD);
+        lua_pushthread(L);
+        return 2;
     }
 
     if (status != LUA_OK)
@@ -201,12 +412,35 @@ extern "C" int lutec_run_once(Runtime *runtime)
         error += "\nstacktrace:\n";
         error += lua_debugtrace(L);
 
+        printf("ERROR: %s\n", error.c_str());
         luaL_error(runtime->GL, "%s", error.c_str());
-        return false;
+        return -1;
     }
 
     if (next.cont)
+    {
+        printf("Running continuation\n");
         next.cont();
+    }
 
-    return 0;
+    printf("Pushing 3, nil to indicate thread finished\n");
+    lua_pushinteger(runtime->GL, 3);
+    lua_pushnil(runtime->GL);
+    return 2;
+}
+
+LUALIB_API int lutec_run_once(lua_State *L)
+{
+    printf("lutec_run_once called\n");
+
+    Runtime *runtime = static_cast<Runtime *>(lua_getthreaddata(L));
+
+    if (runtime == nullptr)
+    {
+        printf("ERROR: Cannot run Lute scheduler without a runtime\n");
+        luaL_error(L, "Cannot run Lute scheduler without a runtime");
+        return -1;
+    }
+
+    return lutec_run_once_internal(runtime);
 }

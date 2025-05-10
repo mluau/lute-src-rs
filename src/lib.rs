@@ -109,11 +109,13 @@ pub fn build_lute() {
         .include("lute/extern/luau/VM/src")
         .include("lute/extern/luau/Common/include")
         .include("lute/extern/luau/Compiler/include")
+        .include("lute/extern/libuv/include")
         .flag("-DLUA_USE_LONGJMP=1")
         .flag("-DLUA_API=extern \"C\"")
         .flag("-DLUACODE_API=extern \"C\"")
         .flag("-DLUACODEGEN_API=extern \"C\"")
         .flag("-DLUAI_MAXCSTACK=1000000")
+        .flag("-fexceptions")
         .compile("Luau.LuteExt");
 
     println!("cargo:rustc-link-lib=dylib=stdc++");

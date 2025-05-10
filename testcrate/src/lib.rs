@@ -1,6 +1,7 @@
 #![allow(clippy::missing_safety_doc)]
 
 use std::os::raw::{c_char, c_int, c_long, c_void};
+use std::io::Write;
 
 #[repr(C)]
 #[allow(non_snake_case, non_camel_case_types)]
@@ -39,11 +40,32 @@ extern "C" {
     pub fn lutec_setup_runtime(state: *mut c_void, data_copy_state: *mut c_void);
     pub fn lutec_destroy_runtime(state: *mut c_void) -> c_int;
     pub fn lua_gettop(state: *mut c_void) -> c_int;
+    pub fn lua_settop(state: *mut c_void, index: c_int);
+    pub fn lua_type(state: *mut c_void, index: c_int) -> c_int;
+    pub fn lua_typename(state: *mut c_void, index: c_int) -> *const c_char;
+    pub fn lua_remove(state: *mut c_void, index: c_int);
     pub fn lua_getfield(state: *mut c_void, index: c_int, k: *const c_char) -> c_int;
     pub fn lua_setfield(state: *mut c_void, index: c_int, k: *const c_char);
     pub fn lua_tolstring(state: *mut c_void, index: c_int, len: *mut c_long) -> *const c_char;
     pub fn lua_call(state: *mut c_void, nargs: c_int, nresults: c_int);
     pub fn lua_pcall(state: *mut c_void, nargs: c_int, nresults: c_int, errfunc: c_int) -> c_int;
+    pub fn lua_newthread(state: *mut c_void) -> *mut c_void;
+    pub fn lua_pushvalue(state: *mut c_void, index: c_int);
+    pub fn lua_resume(
+        state: *mut c_void,
+        from: *mut c_void,
+        narg: c_int,
+    ) -> c_int;
+    pub fn lua_isnumber(state: *mut c_void, index: c_int) -> c_int;
+    pub fn lua_isthread(state: *mut c_void, index: c_int) -> c_int;
+    pub fn lua_yield(
+        state: *mut c_void,
+        from: *mut c_void,
+        narg: c_int,
+    ) -> c_int;
+    pub fn lua_xmove(state: *mut c_void, from: *mut c_void, n: c_int);
+    pub fn lua_xpush(state: *mut c_void, from: *mut c_void, n: c_int);
+    pub fn lua_resetthread(state: *mut c_void) -> c_int;
     pub fn luaL_errorL(state: *mut c_void, format: *const c_char, ...) -> !;
 
     pub fn lua_pushinteger(state: *mut c_void, n: c_int);
@@ -75,7 +97,34 @@ extern "C" {
         size: usize,
         env: c_int,
     ) -> c_int;
+
+    pub fn lutec_set_runtimeinitter(callback: lutec_setupState_init) -> c_int;
 }
+
+extern "C-unwind" {
+    pub fn lutec_run_once(state: *mut c_void) -> c_int;
+}
+
+/*
+typedef struct
+{
+    lua_State *L;
+} lua_State_wrapper;
+*/
+
+#[repr(C)]
+pub struct lua_State_wrapper {
+    pub L: *mut c_void,
+}
+
+#[allow(non_camel_case_types)]
+#[repr(C)]
+pub struct lutec_setupState {
+    pub setup_lua_state: unsafe extern "C" fn(wrapper: *mut lua_State_wrapper),
+}
+
+// Populates function pointers in the given lutec_setupState.
+pub type lutec_setupState_init = unsafe extern "C" fn(config: *mut lutec_setupState);
 
 #[cfg(not(target_os = "emscripten"))]
 extern "C" {
@@ -95,8 +144,37 @@ pub unsafe fn lua_setglobal(state: *mut c_void, k: *const c_char) {
 pub unsafe fn to_string<'a>(state: *mut c_void, index: c_int) -> &'a str {
     let mut len: c_long = 0;
     let ptr = lua_tolstring(state, index, &mut len);
+
+    if ptr.is_null() {
+        println!("Error: lua_tolstring returned null");
+        return "";
+    }
+    if len < 0 {
+        println!("Error: length is negative");
+        return "";
+    }
+
     let bytes = std::slice::from_raw_parts(ptr as *const u8, len as usize);
     std::str::from_utf8(bytes).unwrap()
+}
+
+pub unsafe fn set_lute_state_initter() -> c_int {
+    pub unsafe extern "C" fn init_config(config: *mut lutec_setupState) {
+        unsafe extern "C" fn setup_lua_state(
+            wrapper: *mut lua_State_wrapper
+        ) {
+            let state = luaL_newstate();
+            if state.is_null() {
+                return;
+            }
+            luaL_openlibs(state);
+            (*wrapper).L = state;
+        }
+    
+        (*config).setup_lua_state = setup_lua_state;
+    }
+    
+    lutec_set_runtimeinitter(init_config)
 }
 
 #[cfg(test)]
@@ -157,6 +235,8 @@ mod tests {
     fn test_lute_open() {
         println!("Running Lute tests...");
         unsafe {
+            println!("initter result: {}", set_lute_state_initter());
+
             let state = luaL_newstate();
             let data_copy_state = luaL_newstate();
             lutec_setup_runtime(state, data_copy_state);
@@ -237,24 +317,139 @@ mod tests {
             lua_pushinteger(state, 123);
             lua_pushinteger(state, 321);
 
-            /*if (lua_pcall(L, 2, 1, 0) != 0)
-            error(L, "error running function `f': %s",
-                     lua_tostring(L, -1)); */   
-
             if lua_pcall(state, 2, 1, 0) != 0 {
                 println!(
-                    "error running function `f': {}",
+                    "error running function `f-a': {}",
                     to_string(state, -1)
                 );
             }
 
             assert_eq!(lua_tointegerx(state, -1, ptr::null_mut()), 5);
 
+            println!("gettop call one: {}", lua_gettop(state));
+
+            // Remove the result from the stack
+            while lua_gettop(state) > 0 {
+                // lua_settop(L, -(n)-1)
+                lua_settop(state, -2);
+            }
+
+            println!("gettop call two: {}", lua_gettop(state));
+
+            println!("current dir: {:?}", std::env::current_dir());
+            let code = "local a = vm.create('./test').l(); print(a); return a";
+            let mut bytecode_size = 0;
+            let bytecode = luau_compile(
+                code.as_ptr().cast(),
+                code.len(),
+                ptr::null_mut(),
+                &mut bytecode_size,
+            );
+            let result = luau_load(state, c"=stdin".as_ptr(), bytecode, bytecode_size, 0);
+            assert_eq!(result, 0);
+            free(bytecode.cast());
+
+            // Create a lua thread
+            assert_eq!(std::ffi::CStr::from_ptr(lua_typename(state, lua_type(state, -1))).to_string_lossy(), "function");
+            let thread = lua_newthread(state);
+            assert!(!thread.is_null());
+            // Push the function to the thread
+            lua_pushvalue(state, -2);
+            lua_xpush(state, thread, 1);
+
+            // Resume the thread
+            let mut result = lua_resume(thread, std::ptr::null_mut(), 0);
+            println!("result: {}", result);
+
+            if result == 2 {
+                println!("Error: lua_resume returned LUA_ERRRUN");
+                // Get the error message
+                let error_message = to_string(thread, -1);
+                println!("Error message: {}", error_message);
+                panic!("Error: lua_resume returned LUA_ERRRUN");
+            }
+
+            let mut thread_result = None;
+            loop {
+                // Check if lua_yield is called
+                if result == 1 {
+                    println!("Current gettop: {}", lua_gettop(state));
+                    // Run a loop of the scheduler
+                    println!("lua_yield case");
+
+                    // Use lua_pcall to run the C lutec_run_once
+                    lua_pushcclosurek(
+                        state,
+                        lutec_run_once,
+                        ptr::null(),
+                        0,
+                        ptr::null(),
+                    );
+                    
+                    if lua_pcall(state, 0, 2, 0) != 0 {
+                        panic!("error");
+                        std::io::stdout().flush().unwrap();    
+                    }
+                    std::io::stdout().flush().unwrap();
+
+                    if lua_isnumber(state, -2) == 0 {
+                        let typ = lua_typename(state, lua_type(state, -2));
+                        // Convert to string
+                        {
+                            let typ = std::ffi::CStr::from_ptr(typ);
+                            println!("Error: lutec_run_once did not return a number, type: {}", typ.to_string_lossy());
+                        }
+                        break;
+                    }
+
+                    // Get out the result integer
+                    let result_int = lua_tointegerx(state, -2, ptr::null_mut());
+                    println!("result_int: {}", result_int);
+
+                    if result_int == 1000 {
+                        println!("Nothing happened! Continue waiting...");
+                        while lua_gettop(state) > 0 {
+                            lua_settop(state, -2);
+                        }
+                        println!("gettop call two: {}", lua_gettop(state));
+                        std::io::stdout().flush().unwrap();
+                        continue;
+                    }
+
+                    if result_int == 3 {
+                        println!("Lute test completed");
+                        // Pop the value out of the thread
+                        let result = lua_tointegerx(thread, -1, ptr::null_mut());
+                        println!("result: {}", result);
+                        thread_result = Some(result);
+                        break;
+                    }
+
+                    while lua_gettop(state) > 0 {
+                        lua_settop(state, -2);
+                    }
+                    println!("gettop call three: {}", lua_gettop(state));
+
+                    std::io::stdout().flush().unwrap();
+                    //std::thread::sleep(std::time::Duration::from_secs(1));
+                } else {
+                    break;
+                }
+            }
+
+            assert!(thread_result.is_some());
+            let thread_result = thread_result.unwrap();
+            assert_eq!(thread_result, 78);
+
             assert!(!data_copy_state.is_null());
 
             lutec_destroy_runtime(state);
             lua_close(state);
+
             lua_close(data_copy_state);
+
+            std::io::stdout().flush().unwrap();
+            std::thread::sleep(std::time::Duration::from_secs(1));
         }
     }
 
