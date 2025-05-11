@@ -137,7 +137,7 @@ extern "C" int lutec_opentime(lua_State *L)
 }
 
 // Needed for Lute.VM
-lua_State *setupState(Runtime &runtime, lua_State *parent_th)
+lua_State *setupState(Runtime &runtime)
 {
     printf("setupState called\n");
 
