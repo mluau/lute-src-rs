@@ -146,7 +146,7 @@ lua_State *setupState(Runtime &runtime, lua_State *parent_th)
 
     lutec_setup->setup_lua_state(lua_state_wrapper);
 
-    lua_State *DC = lua_state_wrapper->L;
+    lua_State *DC = std::move(lua_state_wrapper->L);
     if (DC == nullptr)
     {
         printf("ERROR: setup_lua_state returned null DC\n");
@@ -157,10 +157,13 @@ lua_State *setupState(Runtime &runtime, lua_State *parent_th)
     // Separate VM for data copies
     runtime.dataCopy.reset(DC);
 
+    // Drop lua_state_wrapper
+    delete lua_state_wrapper;
+
     // Create the main VM
     lua_State_wrapper *lua_state_wrapper_main = new lua_State_wrapper();
     lutec_setup->setup_lua_state(lua_state_wrapper_main);
-    lua_State *L = lua_state_wrapper_main->L;
+    lua_State *L = std::move(lua_state_wrapper_main->L);
     if (L == nullptr)
     {
         printf("ERROR: setup_lua_state returned null L\n");
@@ -169,6 +172,8 @@ lua_State *setupState(Runtime &runtime, lua_State *parent_th)
     }
 
     runtime.globalState.reset(L);
+
+    delete lua_state_wrapper_main;
 
     L = runtime.globalState.get();
 
@@ -181,31 +186,6 @@ lua_State *setupState(Runtime &runtime, lua_State *parent_th)
 
     luaL_sandbox(L);
 
-    // Store the newly created runtime in `parent`
-    lua_State *parent = lua_mainthread(parent_th);
-
-    // Create __CHILD_VMS__ table in the parent VM if it does not exist
-
-    lua_pushstring(parent, "___CHILD_VMS___");
-    lua_gettable(parent, LUA_REGISTRYINDEX);
-    if (lua_isnil(parent, -1))
-    {
-        // Create the table
-        lua_pop(parent, 1);
-        lua_createtable(parent, 0, 0);
-        lua_pushstring(parent, "___CHILD_VMS___");
-        lua_pushvalue(parent, -2);
-        lua_settable(parent, LUA_REGISTRYINDEX);
-        lua_pop(parent, 1); // Pop the table at index -1 which is the table we want to use
-    }
-
-    // Store the new runtime in the table
-    lua_pushstring(parent, "___CHILD_VMS___");
-    lua_gettable(parent, LUA_REGISTRYINDEX);
-    lua_pushvalue(parent, -2);
-    lua_pushlightuserdata(parent, &runtime);
-    lua_settable(parent, -3);
-    lua_pop(parent, 1); // Pop the table
     return L;
 }
 
@@ -241,64 +221,6 @@ extern "C" int lutec_destroy_runtime(lua_State *L)
         printf("Lute runtime found\n");
 
         runtime->stop.store(true);
-
-        // Look for children
-        lua_pushstring(L, "___CHILD_VMS___");
-        lua_gettable(L, LUA_REGISTRYINDEX);
-        if (lua_istable(L, -1))
-        {
-            // Iterate over the table and destroy all
-            std::vector<Runtime *> children;
-            printf("Lute runtime has child VMs\n");
-            lua_pushnil(L);
-            while (lua_next(L, -2) != 0)
-            {
-                printf("Child VM found\n");
-                // Get the child VM
-                Runtime *child = static_cast<Runtime *>(lua_tolightuserdata(L, -1));
-                if (child)
-                {
-                    children.push_back(child);
-                }
-                lua_pop(L, 1);
-            }
-
-            // Remove the child VMs table
-            lua_pop(L, 1); // Pop the table
-            lua_pushstring(L, "___CHILD_VMS___");
-            lua_pushnil(L);
-            lua_settable(L, LUA_REGISTRYINDEX); // Remove the table from the registry
-            lua_pop(L, 1);                      // Pop the nil value
-
-            for (auto child : children)
-            {
-                {
-                    child->stop.store(true);
-                    child->runLoopCv.notify_one();
-                    std::unique_lock lock(child->continuationMutex); // Wait to all continuations to finish
-                }
-
-                printf("Destroying child VM\n");
-                child->stop.store(true);
-                printf("Child VM closed\n");
-
-                if (child->runLoopThread.joinable())
-                {
-                    child->runLoopCv.notify_one();
-                    child->runLoopThread.join();
-                    printf("Child VM thread joined\n");
-                }
-                else
-                {
-                    printf("Child VM thread not joinable\n");
-                }
-
-                // delete child;
-                lua_close(child->dataCopy.get());
-                child->dataCopy.release();
-                lua_close(child->GL);
-            }
-        }
 
         if (runtime->globalState)
         {

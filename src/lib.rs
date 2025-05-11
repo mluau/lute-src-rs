@@ -116,6 +116,7 @@ pub fn build_lute() {
         .flag("-DLUACODEGEN_API=extern \"C\"")
         .flag("-DLUAI_MAXCSTACK=1000000")
         .flag("-fexceptions")
+        .flag("-g")
         .compile("Luau.LuteExt");
 
     println!("cargo:rustc-link-lib=dylib=stdc++");
