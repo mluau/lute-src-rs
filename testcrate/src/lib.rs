@@ -443,6 +443,8 @@ mod tests {
 
             assert!(!data_copy_state.is_null());
 
+            lua_resetthread(thread);
+
             lutec_destroy_runtime(state);
             lua_close(state);
 
