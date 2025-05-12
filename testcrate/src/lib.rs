@@ -37,7 +37,7 @@ extern "C" {
     pub fn lutec_openvm(state: *mut c_void);
     pub fn lutec_opensystem(state: *mut c_void);
     pub fn lutec_opentime(state: *mut c_void) -> c_int;
-    pub fn lutec_setup_runtime(state: *mut c_void, data_copy_state: *mut c_void);
+    pub fn lutec_setup_runtime(state: *mut c_void);
     pub fn lutec_destroy_runtime(state: *mut c_void) -> c_int;
     pub fn lua_gettop(state: *mut c_void) -> c_int;
     pub fn lua_settop(state: *mut c_void, index: c_int);
@@ -238,8 +238,7 @@ mod tests {
             println!("initter result: {}", set_lute_state_initter());
 
             let state = luaL_newstate();
-            let data_copy_state = luaL_newstate();
-            lutec_setup_runtime(state, data_copy_state);
+            lutec_setup_runtime(state);
             assert!(!state.is_null());
             println!("state: {:?}", state);
             println!("gettop: {}", lua_gettop(state));
@@ -441,14 +440,10 @@ mod tests {
             let thread_result = thread_result.unwrap();
             assert_eq!(thread_result, 78);
 
-            assert!(!data_copy_state.is_null());
-
             lua_resetthread(thread);
 
             lutec_destroy_runtime(state);
             lua_close(state);
-
-            lua_close(data_copy_state);
 
             std::io::stdout().flush().unwrap();
         }

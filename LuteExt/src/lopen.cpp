@@ -201,11 +201,11 @@ extern "C" int lutec_isruntimeloaded(lua_State *L)
 }
 
 // Wrapper to load the Lute runtime into the Lua state returning the created state
-extern "C" void lutec_setup_runtime(lua_State *L, lua_State *DC)
+extern "C" void lutec_setup_runtime(lua_State *L)
 {
     Runtime *runtime = new Runtime();
 
-    runtime->dataCopy.reset(DC);
+    runtime->dataCopy.reset(luaL_newstate());
 
     runtime->globalState.reset(L);
     runtime->GL = L;
@@ -242,6 +242,8 @@ extern "C" int lutec_destroy_runtime(lua_State *L)
         if (runtime->dataCopy)
         {
             printf("Lute runtime data copy found\n");
+            lua_State *DC = runtime->dataCopy.get();
+            lua_close(DC);
             runtime->dataCopy.release();
             printf("Lute runtime data copy released\n");
         }
