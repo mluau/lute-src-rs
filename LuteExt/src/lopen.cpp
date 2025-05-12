@@ -189,6 +189,17 @@ lua_State *setupState(Runtime &runtime)
     return L;
 }
 
+// Wrapper to return whether or not Lute runtime is loaded into a lua state
+extern "C" int lutec_isruntimeloaded(lua_State *L, lua_State *DC)
+{
+    Runtime *runtime = static_cast<Runtime *>(lua_getthreaddata(L));
+    if (runtime)
+    {
+        return 1;
+    }
+    return 0;
+}
+
 // Wrapper to load the Lute runtime into the Lua state returning the created state
 extern "C" void lutec_setup_runtime(lua_State *L, lua_State *DC)
 {
