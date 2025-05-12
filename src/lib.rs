@@ -63,11 +63,13 @@ pub fn build_lute() {
     }
 
     let dst = Config::new("lute")
-        .define("LUAU_EXTERN_C", "ON")
+        .define("LUAU_EXTERN_C", "ON") // Provides DLUA_USE_LONGJMP, DLUA_API, LUACODE_API, LUACODEGEN_API
         .define("LUAU_STATIC_CRT", "ON")
         .define("LUAU_BUILD_STATIC", "ON")
         .define("WITH_ZLIB", "OFF")
         .cxxflag("-DLUAI_MAXCSTACK=1000000")
+        .cxxflag("-DLUA_UTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
+        .cxxflag("-DLUA_LUTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
         .init_cxx_cfg(config)
         .no_build_target(true)
         .build();
@@ -77,6 +79,15 @@ pub fn build_lute() {
         .cpp(true)
         .file("Custom/src/lextra.cpp")
         .file("Custom/src/lflags.cpp")
+        .flag("-DLUA_USE_LONGJMP=1")
+        .flag("-DLUA_API=extern \"C\"")
+        .flag("-DLUACODE_API=extern \"C\"")
+        .flag("-DLUACODEGEN_API=extern \"C\"")
+        .flag("-DLUAI_MAXCSTACK=1000000")
+        .flag("-DLUA_UTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
+        .flag("-DLUA_LUTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
+        .flag("-fexceptions")
+        .flag("-g")
         .include("lute/extern/luau/VM/include")
         .include("lute/extern/luau/VM/src")
         .include("lute/extern/luau/Common/include")
@@ -115,6 +126,8 @@ pub fn build_lute() {
         .flag("-DLUACODE_API=extern \"C\"")
         .flag("-DLUACODEGEN_API=extern \"C\"")
         .flag("-DLUAI_MAXCSTACK=1000000")
+        .flag("-DLUA_UTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
+        .flag("-DLUA_LUTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
         .flag("-fexceptions")
         .flag("-g")
         .compile("Luau.LuteExt");
