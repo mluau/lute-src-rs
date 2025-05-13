@@ -4,7 +4,7 @@ pub fn build_lute() {
     println!("cargo:rerun-if-changed=build.rs");
     //println!("cargo:rerun-if-changed=build_hash.txt");
 
-    println!("cargo:rustc-env=LUAU_VERSION=672"); // TODO: Update when needed
+    println!("cargo:rustc-env=LUAU_VERSION=0.672"); // TODO: Update when needed
 
     // Switch directory to CARGO_MANIFEST_DIR
     std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")).unwrap();
