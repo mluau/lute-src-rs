@@ -254,7 +254,7 @@ pub fn build_lute(lcfg: LConfig) {
     }
     println!("cargo:rustc-link-lib=static=Lute.Fs");
     println!("cargo:rustc-link-lib=static=Lute.Luau");
-    if !lcfg.disable_crypto {
+    if !lcfg.disable_net {
         println!("cargo:rustc-link-lib=static=Lute.Net");
     }
     println!("cargo:rustc-link-lib=static=Lute.Process");
