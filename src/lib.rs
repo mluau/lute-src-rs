@@ -4,8 +4,8 @@ use rustc_version::{version_meta, Channel};
 
 #[derive(Clone, Copy)]
 pub struct LConfig {
-    disable_crypto: bool,
-    disable_net: bool
+    pub disable_crypto: bool,
+    pub disable_net: bool
 }
 
 impl Default for LConfig {
