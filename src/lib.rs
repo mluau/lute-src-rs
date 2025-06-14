@@ -1,11 +1,20 @@
 use cmake::Config;
 
+use rustc_version::{version_meta, Channel};
+
 pub fn build_lute() {
     println!("cargo:rerun-if-changed=build.rs");
     //println!("cargo:rerun-if-changed=build_hash.txt");
 
     println!("cargo:rustc-env=LUAU_VERSION=0.677"); // TODO: Update when needed
-    println!("cargo:rustc-link-arg=-fuse-ld=lld");
+
+    // On non-nightly builds, we need to use the lld linker
+    match version_meta().unwrap().channel {
+        Channel::Nightly | Channel::Dev => {}
+        _ => {
+            println!("cargo:rustc-link-arg=-fuse-ld=lld");
+        }
+    }
 
     // Switch directory to CARGO_MANIFEST_DIR
     std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")).unwrap();
