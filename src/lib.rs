@@ -270,17 +270,20 @@ pub fn build_lute(lcfg: LConfig) {
         println!("cargo:rustc-link-lib=static=uSockets");
     }
 
-    // boringssl
-    println!(
-        "cargo:rustc-link-search=native={}/build/extern/boringssl",
-        dst.display()
-    );
-
     if !lcfg.disable_net || !lcfg.disable_crypto {
+        // boringssl
+        println!(
+            "cargo:rustc-link-search=native={}/build/extern/boringssl",
+            dst.display()
+        );
         println!("cargo:rustc-link-lib=static=crypto");
         println!("cargo:rustc-link-lib=static=decrepit");
         println!("cargo:rustc-link-lib=static=pki");
         println!("cargo:rustc-link-lib=static=ssl");
+    }
+
+    if !lcfg.disable_crypto {
+        // libsodium
         println!("cargo:rustc-link-lib=static=sodium");
     }
 
@@ -317,6 +320,6 @@ pub fn build_lute(lcfg: LConfig) {
             "cargo:rustc-link-search=native={}/build/extern/zlib",
             dst.display()
         );
-        println!("cargo:rustc-link-lib=z");
+        println!("cargo:rustc-link-lib=static=z");
     }
 }
