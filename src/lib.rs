@@ -4,7 +4,7 @@ pub fn build_lute() {
     println!("cargo:rerun-if-changed=build.rs");
     //println!("cargo:rerun-if-changed=build_hash.txt");
 
-    println!("cargo:rustc-env=LUAU_VERSION=0.672"); // TODO: Update when needed
+    println!("cargo:rustc-env=LUAU_VERSION=0.677"); // TODO: Update when needed
 
     // Switch directory to CARGO_MANIFEST_DIR
     std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")).unwrap();
@@ -22,9 +22,9 @@ pub fn build_lute() {
     }
 
     // Use tools/luthier.py in the lute folder to fetch dependencies
-    let output = std::process::Command::new("python3")
+    let output = std::process::Command::new("lute")
         .current_dir("lute")
-        .arg("tools/luthier.py")
+        .arg("tools/luthier.luau")
         .arg("fetch")
         .arg("lute")
         .output()
@@ -34,9 +34,9 @@ pub fn build_lute() {
         panic!("Failed to run tools/luthier.py fetch lute with stderr: {}", String::from_utf8_lossy(&output.stderr));
     }
 
-    let output = std::process::Command::new("python3")
+    let output = std::process::Command::new("lute")
         .current_dir("lute")
-        .arg("tools/luthier.py")
+        .arg("tools/luthier.luau")
         .arg("generate")
         .arg("lute")
         .output()
@@ -52,7 +52,7 @@ pub fn build_lute() {
     let mut config = cc::Build::new();
     config
         .warnings(false)
-        .cargo_metadata(false)
+        .cargo_metadata(true)
         .std("c++17")
         .cpp(true);
 
@@ -108,16 +108,17 @@ pub fn build_lute() {
     cc::Build::new() 
         .cpp(true)
         .file("LuteExt/src/lopen.cpp")
-        .include("lute/crypto/include")
-        .include("lute/fs/include")
-        .include("lute/luau/include")
-        .include("lute/net/include")
-        .include("lute/process/include")
-        .include("lute/system/include")
-        .include("lute/vm/include")
-        .include("lute/task/include")
-        .include("lute/time/include")
-        .include("lute/runtime/include")
+        .include("lute/lute/cli/include")
+        .include("lute/lute/crypto/include")
+        .include("lute/lute/fs/include")
+        .include("lute/lute/luau/include")
+        .include("lute/lute/net/include")
+        .include("lute/lute/process/include")
+        .include("lute/lute/system/include")
+        .include("lute/lute/vm/include")
+        .include("lute/lute/task/include")
+        .include("lute/lute/time/include")
+        .include("lute/lute/runtime/include")
         .include("lute/extern/luau/VM/include")
         .include("lute/extern/luau/VM/src")
         .include("lute/extern/luau/Common/include")
@@ -137,9 +138,21 @@ pub fn build_lute() {
     println!("cargo:rustc-link-lib=dylib=stdc++");
     println!("cargo:rustc-link-search=native={}/build", dst.display());
     println!("cargo:rustc-link-search=native={}/build/extern/luau", dst.display());
-    
-    println!("cargo:rustc-link-lib=static=Luau.Analysis");
+    println!("cargo:rustc-link-search=native={}/build/lute/crypto", dst.display());
+    println!("cargo:rustc-link-search=native={}/build/lute/fs", dst.display());
+    println!("cargo:rustc-link-search=native={}/build/lute/luau", dst.display());
+    println!("cargo:rustc-link-search=native={}/build/lute/net", dst.display());
+    println!("cargo:rustc-link-search=native={}/build/lute/process", dst.display());
+    println!("cargo:rustc-link-search=native={}/build/lute/runtime", dst.display());
+    println!("cargo:rustc-link-search=native={}/build/lute/require", dst.display());
+    println!("cargo:rustc-link-search=native={}/build/lute/std", dst.display());
+    println!("cargo:rustc-link-search=native={}/build/lute/system", dst.display());
+    println!("cargo:rustc-link-search=native={}/build/lute/task", dst.display());
+    println!("cargo:rustc-link-search=native={}/build/lute/time", dst.display());
+    println!("cargo:rustc-link-search=native={}/build/lute/vm", dst.display());
+
     println!("cargo:rustc-link-lib=static=Luau.Ast");
+    println!("cargo:rustc-link-lib=static=Luau.Analysis");
     println!("cargo:rustc-link-lib=static=Luau.CodeGen");
     println!("cargo:rustc-link-lib=static=Luau.Config");
     println!("cargo:rustc-link-lib=static=Luau.Compiler");
@@ -154,6 +167,7 @@ pub fn build_lute() {
     println!("cargo:rustc-link-lib=static=Lute.Net");
     println!("cargo:rustc-link-lib=static=Lute.Process");
     println!("cargo:rustc-link-lib=static=Lute.Runtime");
+    println!("cargo:rustc-link-lib=static=Lute.Require");
     println!("cargo:rustc-link-lib=static=Lute.Std");
     println!("cargo:rustc-link-lib=static=Lute.System");
     println!("cargo:rustc-link-lib=static=Lute.Task");
@@ -167,6 +181,7 @@ pub fn build_lute() {
     println!("cargo:rustc-link-lib=static=decrepit");
     println!("cargo:rustc-link-lib=static=pki");
     println!("cargo:rustc-link-lib=static=ssl");
+println!("cargo:rustc-link-lib=static=sodium");
 
     // curl
     println!("cargo:rustc-link-search=native={}/build/extern/curl/lib", dst.display());
@@ -185,5 +200,7 @@ pub fn build_lute() {
     println!("cargo:rustc-link-lib=static=uv");
 
     // zlib (system)
+    println!("cargo:rustc-link-search=native={}/build/extern/zlib", dst.display());
+    println!("cargo:rustc-link-lib=static=z");
 }
 

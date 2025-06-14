@@ -10,6 +10,7 @@
 #include "lute/vm.h"
 #include "lute/system.h"
 #include "lute/runtime.h"
+#include "lute/clicommands.h"
 #include "uv.h"
 
 typedef struct
@@ -136,8 +137,15 @@ extern "C" int lutec_opentime(lua_State *L)
     return luteopen_time(L);
 }
 
+// Needed for Lute to link
+CliModuleResult getCliModule(std::string_view path)
+{
+    return {CliModuleType::NotFound};
+}
+
+
 // Needed for Lute.VM
-lua_State *setupState(Runtime &runtime)
+lua_State *setupState(Runtime &runtime, void (*)(lua_State*))
 {
     printf("setupState called\n");
 

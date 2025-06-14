@@ -1,3 +1,6 @@
 [submodule "lute"]
 	path = lute
-	url = https://github.com/mlua-lute-integration/lute
+	url = https://github.com/mluau/lute
+[submodule "lute-bins"]
+	path = lute-bins
+	url = https://github.com/mluau/lute-bins

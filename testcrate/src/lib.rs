@@ -336,7 +336,7 @@ mod tests {
             println!("gettop call two: {}", lua_gettop(state));
 
             println!("current dir: {:?}", std::env::current_dir());
-            let code = "local a = vm.create('./test').l(); print(a); return a";
+            let code = "local a = vm.create('./testcrate/test').l(); print(a); return a";
             let mut bytecode_size = 0;
             let bytecode = luau_compile(
                 code.as_ptr().cast(),
