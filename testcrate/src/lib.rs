@@ -123,6 +123,8 @@ pub struct RunOnceResult {
 extern "C-unwind" {
     pub fn lutec_run_once(state: *mut c_void) -> RunOnceResult;
     pub fn lutec_has_work(state: *mut c_void) -> c_int;
+    pub fn lutec_has_threads(state: *mut c_void) -> c_int;
+    pub fn lutec_has_continuation(state: *mut c_void) -> c_int;
 }
 
 /*
@@ -387,14 +389,19 @@ mod tests {
                 panic!("Error: lua_resume returned LUA_ERRRUN");
             }
 
+            if result != 1 {
+                println!("Error: lua_resume returned unexpected result: {}", result);
+                panic!("Error: lua_resume returned unexpected result");
+            }
+
             let mut thread_result = None;
+            
             let mut i = 0;
             loop {
                 i += 1;
 
                 if i > 100 {
-                    println!("Breaking after 100 iterations");
-                    break;
+                    panic!("Too many iterations, breaking to avoid infinite loop");
                 }
 
                 println!("Current gettop: {}", lua_gettop(state));
@@ -405,8 +412,6 @@ mod tests {
                     println!("lua_yield case");
 
                     thread_result = Some(1);
-                    println!("called lutec_run_once");
-                    std::io::stdout().flush().unwrap();
                     let run_once_result = lutec_run_once(state);
                     if run_once_result.op == LUTE_STATE_MISSING_ERROR {
                         println!("Lute state missing error");
@@ -425,22 +430,31 @@ mod tests {
 
                     println!("HERE");
 
-                    if lutec_has_work(state) == 1 {
+                    if lutec_has_threads(state) == 1 {
                         println!("We still have work to do");
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        continue;
+                    }
+
+                    if lutec_has_continuation(state) == 1 {
+                        println!("Continuations still exist, continuing");
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        continue;
+                    }
+
+                    if lutec_has_work(state) == 1 {
+                        println!("Work still exists, continuing");
+                        std::thread::sleep(std::time::Duration::from_millis(100));
                         continue;
                     }
 
                     println!("Lute test completed");
                     // Pop the value out of the thread
                     let result = lua_tointegerx(thread, -1, ptr::null_mut());
+                    lua_settop(thread, -2);
                     println!("result: {}", result);
                     thread_result = Some(result);
                     break;
-
-                    while lua_gettop(state) > 0 {
-                        lua_settop(state, -2);
-                    }
-                    println!("gettop call three: {}", lua_gettop(state));
                 } else {
                     break;
                 }
@@ -454,8 +468,6 @@ mod tests {
 
             lutec_destroy_runtime(state);
             lua_close(state);
-
-            std::io::stdout().flush().unwrap();
         }
     }
 
