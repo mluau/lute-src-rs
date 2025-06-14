@@ -316,6 +316,38 @@ LUALIB_API RunOnceResult lutec_run_once(lua_State *L)
     return lutec_run_once_internal(runtime);
 }
 
+LUALIB_API int lutec_run_once_lua(lua_State *L)
+{
+    Runtime *runtime = static_cast<Runtime *>(lua_getthreaddata(L));
+
+    if (runtime == nullptr)
+    {
+        luaL_errorL(L, "No runtime state found");
+    }
+
+    auto ror = lutec_run_once_internal(runtime);
+
+    switch (ror.op)
+    {
+    case LUTE_STATE_MISSING_ERROR:
+        luaL_errorL(L, "Missing lua state");
+    case LUTE_STATE_ERROR:
+        lua_xmove(ror.state, L, 1);
+        lua_error(L);
+    case LUTE_STATE_SUCCESS:
+        lua_pushinteger(L, ror.op);
+        lua_pushthread(ror.state);
+        lua_xmove(ror.state, L, 1);
+        return 2;
+    case LUTE_STATE_EMPTY:
+        lua_pushinteger(L, ror.op);
+        lua_pushnil(L);
+        return 2;
+    case LUTE_STATE_UNSUPPORTED_OP:
+        luaL_errorL(L, "Unsupported response from scheduler");
+    }
+}
+
 LUALIB_API int lutec_has_work(lua_State *L)
 {
     Runtime *runtime = static_cast<Runtime *>(lua_getthreaddata(L));

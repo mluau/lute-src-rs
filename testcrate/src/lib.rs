@@ -91,6 +91,9 @@ extern "C" {
     ) -> c_int;
 
     pub fn lutec_set_runtimeinitter(callback: lutec_setupState_init) -> c_int;
+    pub fn lua_checkstack(state: *mut c_void, extra: c_int) -> c_int;
+    pub fn lua_tothread(state: *mut c_void, idx: c_int) -> *mut c_void;
+
 }
 
 /*
@@ -122,6 +125,7 @@ pub struct RunOnceResult {
 
 extern "C-unwind" {
     pub fn lutec_run_once(state: *mut c_void) -> RunOnceResult;
+    pub fn lutec_run_once_lua(state: *mut c_void) -> c_int;
     pub fn lutec_has_work(state: *mut c_void) -> c_int;
     pub fn lutec_has_threads(state: *mut c_void) -> c_int;
     pub fn lutec_has_continuation(state: *mut c_void) -> c_int;
@@ -407,26 +411,27 @@ mod tests {
                 println!("Current gettop: {}", lua_gettop(state));
                 // Check if lua_yield is called
                 if result == 1 {
+                    lua_checkstack(state, 1);
                     println!("Current gettop: {}", lua_gettop(state));
                     // Run a loop of the scheduler
                     println!("lua_yield case");
 
                     thread_result = Some(1);
-                    let run_once_result = lutec_run_once(state);
-                    if run_once_result.op == LUTE_STATE_MISSING_ERROR {
-                        println!("Lute state missing error");
-                        break;
-                    } else if run_once_result.op == LUTE_STATE_ERROR {
-                        println!("Lute state error");
-                        // Pop out the error message
-                        let error_message = to_string(run_once_result.state, -1);
-                        println!("Error message: {}", error_message);
-                        lua_settop(run_once_result.state, -2); // Pop the error message
-                        break;
-                    } else if run_once_result.op == LUTE_STATE_UNSUPPORTED_OP {
-                        println!("Lute state unsupported operation");
-                        break;
+
+                    lua_pushcclosurek(state, lutec_run_once_lua, ptr::null(), 0, ptr::null());
+                    if lua_pcall(state, 0, 2, 0) != 0 {
+                        let error_message = to_string(state, -1);
+                        panic!("Got error: {}", error_message);
                     }
+
+                    let op = lua_tointegerx(state, -1, ptr::null_mut());
+                    if op == LUTE_STATE_SUCCESS {
+                        let res = lua_tothread(state, -2);
+
+                        assert!(!res.is_null());
+                    }
+
+                    lua_settop(state, -3);
 
                     println!("HERE");
 
