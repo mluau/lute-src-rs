@@ -29,34 +29,34 @@ typedef void (*lutec_setupState_init)(lutec_setupState *config);
 
 static lutec_setupState *lutec_setup = nullptr;
 
+extern "C" int LUTEC_RUNTIMEINITTER_OK = 0;
+extern "C" int LUTEC_RUNTIMEINITTER_CANNOT_MODIFY_ONCE_SET = -1;
+extern "C" int LUTEC_RUNTIMEINITTER_INVALID_SETUP_STATE = -2;
+extern "C" int LUTEC_RUNTIMEINITTER_INVALID_SETUP_STATE_RESPONSE = -3;
+extern "C" int LUTEC_RUNTIMEINITTER_INVALID_LUA_STATE = -4;
+
 extern "C" int lutec_set_runtimeinitter(lutec_setupState_init config_init)
 {
-    printf("lutec_set_runtimeinitter called\n");
     if (lutec_setup)
     {
-        printf("ERROR: lutec_set_runtimeinitter called after setup\n");
-        return -1; // Cannot modify the setup state after it has been set
+        return LUTEC_RUNTIMEINITTER_CANNOT_MODIFY_ONCE_SET; // Cannot modify the setup state after it has been set
     }
     if (!config_init)
     {
-        printf("ERROR: lutec_set_runtimeinitter called with null config_init\n");
-        return -2; // Invalid setup state
+        return LUTEC_RUNTIMEINITTER_INVALID_SETUP_STATE; // Invalid setup state
     }
 
-    printf("Creating new lutec_setupState\n");
     lutec_setupState *lute_setup_ptr = new lutec_setupState();
 
     config_init(lute_setup_ptr); // SAFETY: lute_setup is allocated on the heap
 
     if (lute_setup_ptr->setup_lua_state == nullptr)
     {
-        printf("ERROR: lutec_set_runtimeinitter called with null setup_lua_state\n");
         delete lute_setup_ptr;
         lute_setup_ptr = nullptr;
-        return -3; // Invalid setup state
+        return LUTEC_RUNTIMEINITTER_INVALID_SETUP_STATE_RESPONSE; // Invalid setup state response
     }
     lutec_setup = lute_setup_ptr;
-    printf("lutec_set_runtimeinitter callback done\n");
     // Test by calling the setup_lua_state function
     lua_State_wrapper *lua_state_wrapper = new lua_State_wrapper();
 
@@ -65,15 +65,12 @@ extern "C" int lutec_set_runtimeinitter(lutec_setupState_init config_init)
     lua_State *L = lua_state_wrapper->L;
     if (L == nullptr)
     {
-        printf("ERROR: setup_lua_state returned null lua_State\n");
         delete lute_setup_ptr;
         lutec_setup = nullptr;
-        return -5; // Invalid setup state
+        return LUTEC_RUNTIMEINITTER_INVALID_LUA_STATE; // Invalid lua_State
     }
 
-    printf("lutec_set_runtimeinitter done\n");
-
-    return 0;
+    return LUTEC_RUNTIMEINITTER_OK; // Successfully set up the runtime
 }
 
 /*
@@ -142,6 +139,9 @@ extern "C" int lutec_opentime(lua_State *L)
 }
 
 // Needed for Lute to link
+//
+// This always returns NotFound as CLI Filesystem is not supported in embedding
+// contexts
 CliModuleResult getCliModule(std::string_view path)
 {
     return {CliModuleType::NotFound};
@@ -150,8 +150,6 @@ CliModuleResult getCliModule(std::string_view path)
 // Needed for Lute.VM
 lua_State *setupState(Runtime &runtime, void (*)(lua_State *))
 {
-    printf("setupState called\n");
-
     // Make data copy VM
     lua_State_wrapper *lua_state_wrapper = new lua_State_wrapper();
 
@@ -160,7 +158,6 @@ lua_State *setupState(Runtime &runtime, void (*)(lua_State *))
     lua_State *DC = std::move(lua_state_wrapper->L);
     if (DC == nullptr)
     {
-        printf("ERROR: setup_lua_state returned null DC\n");
         delete lua_state_wrapper;
         return nullptr; // Invalid setup state
     }
@@ -177,7 +174,6 @@ lua_State *setupState(Runtime &runtime, void (*)(lua_State *))
     lua_State *L = std::move(lua_state_wrapper_main->L);
     if (L == nullptr)
     {
-        printf("ERROR: setup_lua_state returned null L\n");
         delete lua_state_wrapper_main;
         return nullptr; // Invalid setup state
     }
@@ -230,38 +226,24 @@ extern "C" int lutec_destroy_runtime(lua_State *L)
 {
     Runtime *runtime = static_cast<Runtime *>(lua_getthreaddata(L));
 
-    printf("Destroying Lute runtime\n");
-
     if (runtime)
     {
-        printf("Lute runtime found\n");
-
         runtime->stop.store(true);
 
         if (runtime->globalState)
         {
-            printf("Lute runtime global state found\n");
             runtime->globalState.release();
             runtime->GL = nullptr;
         }
         if (runtime->dataCopy)
         {
-            printf("Lute runtime data copy found\n");
             lua_State *DC = runtime->dataCopy.get();
             lua_close(DC);
             runtime->dataCopy.release();
-            printf("Lute runtime data copy released\n");
         }
-
-        printf("Lute runtime data copy deleted\n");
 
         lua_setthreaddata(L, nullptr);
         delete runtime;
-        printf("Lute runtime global state deleted\n");
-
-        // Run 2 gc cycles to clean up the memory
-        lua_gc(L, LUA_GCCOLLECT, 2);
-        lua_gc(L, LUA_GCCOLLECT, 2);
 
         return 0;
     }
@@ -344,7 +326,55 @@ LUALIB_API int lutec_has_work(lua_State *L)
     }
 
     bool result = runtime->hasWork();
-    if (result)
+    if (result == true)
+    {
+        printf("Lute runtime has work to do\n");
+        return 1; // There is work to do
+    }
+    else
+    {
+        return 0; // No work to do
+    }
+}
+
+/*
+bool Runtime::hasWork()
+{
+    return hasContinuations() || hasThreads() || activeTokens.load() != 0;
+}
+*/
+
+LUALIB_API int lutec_has_continuation(lua_State *L)
+{
+    Runtime *runtime = static_cast<Runtime *>(lua_getthreaddata(L));
+
+    if (runtime == nullptr)
+    {
+        return 0;
+    }
+
+    bool result = runtime->hasContinuations();
+    if (result == true)
+    {
+        return 1; // There is work to do
+    }
+    else
+    {
+        return 0; // No work to do
+    }
+}
+
+LUALIB_API int lutec_has_threads(lua_State *L)
+{
+    Runtime *runtime = static_cast<Runtime *>(lua_getthreaddata(L));
+
+    if (runtime == nullptr)
+    {
+        return 0;
+    }
+
+    bool result = runtime->hasThreads();
+    if (result == true)
     {
         return 1; // There is work to do
     }
