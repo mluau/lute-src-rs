@@ -5,11 +5,15 @@ pub fn build_lute() {
     //println!("cargo:rerun-if-changed=build_hash.txt");
 
     println!("cargo:rustc-env=LUAU_VERSION=0.677"); // TODO: Update when needed
+    println!("cargo:rustc-link-arg=-fuse-ld=lld");
 
     // Switch directory to CARGO_MANIFEST_DIR
     std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")).unwrap();
     // This is needed to run the luthier.py script
-    println!("Current directory: {}", std::env::current_dir().unwrap().display());
+    println!(
+        "Current directory: {}",
+        std::env::current_dir().unwrap().display()
+    );
 
     // Check that python is installed, error if not. This is needed
     // for luthier.py to fetch dependencies
@@ -31,7 +35,10 @@ pub fn build_lute() {
         .expect("Failed to run tools/luthier.py fetch lute");
 
     if !output.status.success() {
-        panic!("Failed to run tools/luthier.py fetch lute with stderr: {}", String::from_utf8_lossy(&output.stderr));
+        panic!(
+            "Failed to run tools/luthier.py fetch lute with stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     let output = std::process::Command::new("lute")
@@ -43,11 +50,14 @@ pub fn build_lute() {
         .expect("Failed to run tools/luthier.py fetch lute");
 
     if !output.status.success() {
-        panic!("Failed to run tools/luthier.py generate lute with stderr: {}", String::from_utf8_lossy(&output.stderr));
+        panic!(
+            "Failed to run tools/luthier.py generate lute with stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     //panic!("Cannot build lute runtime yet, please run `cargo build` manually");
-    
+
     // Configure C++
     let mut config = cc::Build::new();
     config
@@ -75,7 +85,7 @@ pub fn build_lute() {
         .init_cxx_cfg(config)
         .no_build_target(true)
         .build();
-    
+
     // Custom is a special library that needs to be built manually and linked in as well
     cc::Build::new()
         .cpp(true)
@@ -96,7 +106,7 @@ pub fn build_lute() {
         .include("lute/extern/luau/Compiler/include")
         .compile("Luau.Custom");
 
-    // Also build LuteExt  
+    // Also build LuteExt
 
     /*
     target_compile_definitions(Luau.VM PUBLIC LUA_USE_LONGJMP=1)
@@ -105,7 +115,7 @@ pub fn build_lute() {
     target_compile_definitions(Luau.CodeGen PUBLIC LUACODEGEN_API=extern\"C\")
     */
 
-    cc::Build::new() 
+    cc::Build::new()
         .cpp(true)
         .file("LuteExt/src/lopen.cpp")
         .include("lute/lute/cli/include")
@@ -137,19 +147,58 @@ pub fn build_lute() {
 
     println!("cargo:rustc-link-lib=dylib=stdc++");
     println!("cargo:rustc-link-search=native={}/build", dst.display());
-    println!("cargo:rustc-link-search=native={}/build/extern/luau", dst.display());
-    println!("cargo:rustc-link-search=native={}/build/lute/crypto", dst.display());
-    println!("cargo:rustc-link-search=native={}/build/lute/fs", dst.display());
-    println!("cargo:rustc-link-search=native={}/build/lute/luau", dst.display());
-    println!("cargo:rustc-link-search=native={}/build/lute/net", dst.display());
-    println!("cargo:rustc-link-search=native={}/build/lute/process", dst.display());
-    println!("cargo:rustc-link-search=native={}/build/lute/runtime", dst.display());
-    println!("cargo:rustc-link-search=native={}/build/lute/require", dst.display());
-    println!("cargo:rustc-link-search=native={}/build/lute/std", dst.display());
-    println!("cargo:rustc-link-search=native={}/build/lute/system", dst.display());
-    println!("cargo:rustc-link-search=native={}/build/lute/task", dst.display());
-    println!("cargo:rustc-link-search=native={}/build/lute/time", dst.display());
-    println!("cargo:rustc-link-search=native={}/build/lute/vm", dst.display());
+    println!(
+        "cargo:rustc-link-search=native={}/build/extern/luau",
+        dst.display()
+    );
+    println!(
+        "cargo:rustc-link-search=native={}/build/lute/crypto",
+        dst.display()
+    );
+    println!(
+        "cargo:rustc-link-search=native={}/build/lute/fs",
+        dst.display()
+    );
+    println!(
+        "cargo:rustc-link-search=native={}/build/lute/luau",
+        dst.display()
+    );
+    println!(
+        "cargo:rustc-link-search=native={}/build/lute/net",
+        dst.display()
+    );
+    println!(
+        "cargo:rustc-link-search=native={}/build/lute/process",
+        dst.display()
+    );
+    println!(
+        "cargo:rustc-link-search=native={}/build/lute/runtime",
+        dst.display()
+    );
+    println!(
+        "cargo:rustc-link-search=native={}/build/lute/require",
+        dst.display()
+    );
+    println!(
+        "cargo:rustc-link-search=native={}/build/lute/std",
+        dst.display()
+    );
+    println!(
+        "cargo:rustc-link-search=native={}/build/lute/system",
+        dst.display()
+    );
+    println!(
+        "cargo:rustc-link-search=native={}/build/lute/task",
+        dst.display()
+    );
+    println!(
+        "cargo:rustc-link-search=native={}/build/lute/time",
+        dst.display()
+    );
+    println!(
+        "cargo:rustc-link-search=native={}/build/lute/vm",
+        dst.display()
+    );
 
     println!("cargo:rustc-link-lib=static=Luau.Ast");
     println!("cargo:rustc-link-lib=static=Luau.Analysis");
@@ -176,16 +225,22 @@ pub fn build_lute() {
     println!("cargo:rustc-link-lib=static=uSockets");
 
     // boringssl
-    println!("cargo:rustc-link-search=native={}/build/extern/boringssl", dst.display());
+    println!(
+        "cargo:rustc-link-search=native={}/build/extern/boringssl",
+        dst.display()
+    );
     println!("cargo:rustc-link-lib=static=crypto");
     println!("cargo:rustc-link-lib=static=decrepit");
     println!("cargo:rustc-link-lib=static=pki");
     println!("cargo:rustc-link-lib=static=ssl");
-println!("cargo:rustc-link-lib=static=sodium");
+    println!("cargo:rustc-link-lib=static=sodium");
 
     // curl
-    println!("cargo:rustc-link-search=native={}/build/extern/curl/lib", dst.display());
-    
+    println!(
+        "cargo:rustc-link-search=native={}/build/extern/curl/lib",
+        dst.display()
+    );
+
     // Debug
     let binding = Config::new("lute");
     let profile = binding.get_profile();
@@ -196,11 +251,16 @@ println!("cargo:rustc-link-lib=static=sodium");
     }
 
     // libuv
-    println!("cargo:rustc-link-search=native={}/build/extern/libuv", dst.display());
+    println!(
+        "cargo:rustc-link-search=native={}/build/extern/libuv",
+        dst.display()
+    );
     println!("cargo:rustc-link-lib=static=uv");
 
     // zlib (system)
-    println!("cargo:rustc-link-search=native={}/build/extern/zlib", dst.display());
+    println!(
+        "cargo:rustc-link-search=native={}/build/extern/zlib",
+        dst.display()
+    );
     println!("cargo:rustc-link-lib=static=z");
 }
-
