@@ -71,7 +71,7 @@ pub fn build_lute() {
     let mut config = cc::Build::new();
     config
         .warnings(false)
-        .cargo_metadata(false)
+        .cargo_metadata(true)
         .std("c++17")
         .cpp(true);
 
@@ -87,12 +87,11 @@ pub fn build_lute() {
         .define("LUAU_EXTERN_C", "ON") // Provides DLUA_USE_LONGJMP, DLUA_API, LUACODE_API, LUACODEGEN_API
         .define("LUAU_STATIC_CRT", "ON")
         .define("LUAU_BUILD_STATIC", "ON")
-        .define("WITH_ZLIB", "OFF")
         .cxxflag("-DLUAI_MAXCSTACK=1000000")
         .cxxflag("-DLUA_UTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
         .cxxflag("-DLUA_LUTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
         .init_cxx_cfg(config)
-        .no_build_target(false)
+        .no_build_target(true)
         .build();
 
     // Custom is a special library that needs to be built manually and linked in as well
@@ -152,7 +151,6 @@ pub fn build_lute() {
         .flag("-fexceptions")
         .compile("Luau.LuteExt");
 
-    println!("cargo:rustc-link-lib=dylib=stdc++");
     println!("cargo:rustc-link-search=native={}/build", dst.display());
     println!(
         "cargo:rustc-link-search=native={}/build/extern/luau",
@@ -269,5 +267,5 @@ pub fn build_lute() {
         "cargo:rustc-link-search=native={}/build/extern/zlib",
         dst.display()
     );
-    println!("cargo:rustc-link-lib=static=z");
+    println!("cargo:rustc-link-lib=z");
 }
