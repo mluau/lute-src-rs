@@ -62,7 +62,7 @@ pub fn build_lute() {
     let mut config = cc::Build::new();
     config
         .warnings(false)
-        .cargo_metadata(true)
+        .cargo_metadata(false)
         .std("c++17")
         .cpp(true);
 
@@ -83,7 +83,7 @@ pub fn build_lute() {
         .cxxflag("-DLUA_UTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
         .cxxflag("-DLUA_LUTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
         .init_cxx_cfg(config)
-        .no_build_target(true)
+        .no_build_target(false)
         .build();
 
     // Custom is a special library that needs to be built manually and linked in as well
@@ -99,7 +99,6 @@ pub fn build_lute() {
         .flag("-DLUA_UTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
         .flag("-DLUA_LUTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
         .flag("-fexceptions")
-        .flag("-g")
         .include("lute/extern/luau/VM/include")
         .include("lute/extern/luau/VM/src")
         .include("lute/extern/luau/Common/include")
@@ -142,7 +141,6 @@ pub fn build_lute() {
         .flag("-DLUA_UTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
         .flag("-DLUA_LUTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
         .flag("-fexceptions")
-        .flag("-g")
         .compile("Luau.LuteExt");
 
     println!("cargo:rustc-link-lib=dylib=stdc++");
