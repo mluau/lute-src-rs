@@ -1,7 +1,7 @@
 #![allow(clippy::missing_safety_doc)]
 
-use std::os::raw::{c_char, c_int, c_long, c_void};
 use std::io::Write;
+use std::os::raw::{c_char, c_int, c_long, c_void};
 
 #[repr(C)]
 #[allow(non_snake_case, non_camel_case_types)]
@@ -51,18 +51,10 @@ extern "C" {
     pub fn lua_pcall(state: *mut c_void, nargs: c_int, nresults: c_int, errfunc: c_int) -> c_int;
     pub fn lua_newthread(state: *mut c_void) -> *mut c_void;
     pub fn lua_pushvalue(state: *mut c_void, index: c_int);
-    pub fn lua_resume(
-        state: *mut c_void,
-        from: *mut c_void,
-        narg: c_int,
-    ) -> c_int;
+    pub fn lua_resume(state: *mut c_void, from: *mut c_void, narg: c_int) -> c_int;
     pub fn lua_isnumber(state: *mut c_void, index: c_int) -> c_int;
     pub fn lua_isthread(state: *mut c_void, index: c_int) -> c_int;
-    pub fn lua_yield(
-        state: *mut c_void,
-        from: *mut c_void,
-        narg: c_int,
-    ) -> c_int;
+    pub fn lua_yield(state: *mut c_void, from: *mut c_void, narg: c_int) -> c_int;
     pub fn lua_xmove(state: *mut c_void, from: *mut c_void, n: c_int);
     pub fn lua_xpush(state: *mut c_void, from: *mut c_void, n: c_int);
     pub fn lua_resetthread(state: *mut c_void) -> c_int;
@@ -101,8 +93,36 @@ extern "C" {
     pub fn lutec_set_runtimeinitter(callback: lutec_setupState_init) -> c_int;
 }
 
+/*
+extern "C" const int LUTE_STATE_MISSING_ERROR = 0;
+extern "C" const int LUTE_STATE_ERROR = 1;
+extern "C" const int LUTE_STATE_SUCCESS = 2;
+extern "C" const int LUTE_STATE_EMPTY = 3;
+extern "C" const int LUTE_STATE_UNSUPPORTED_OP = 4;
+
+extern "C" struct RunOnceResult
+{
+    int op = LUTE_STATE_UNSUPPORTED_OP; // Default to unsupported operation
+    lua_State *state = nullptr;         // The lua_State that was run, if applicable
+};
+*/
+
+pub const LUTE_STATE_MISSING_ERROR: c_int = 0;
+pub const LUTE_STATE_ERROR: c_int = 1;
+pub const LUTE_STATE_SUCCESS: c_int = 2;
+pub const LUTE_STATE_EMPTY: c_int = 3;
+pub const LUTE_STATE_UNSUPPORTED_OP: c_int = 4;
+
+#[repr(C)]
+#[allow(non_camel_case_types)]
+pub struct RunOnceResult {
+    pub op: c_int,          // Operation result code
+    pub state: *mut c_void, // The lua_State that was run, if applicable
+}
+
 extern "C-unwind" {
-    pub fn lutec_run_once(state: *mut c_void) -> c_int;
+    pub fn lutec_run_once(state: *mut c_void) -> RunOnceResult;
+    pub fn lutec_has_work(state: *mut c_void) -> c_int;
 }
 
 /*
@@ -160,9 +180,7 @@ pub unsafe fn to_string<'a>(state: *mut c_void, index: c_int) -> &'a str {
 
 pub unsafe fn set_lute_state_initter() -> c_int {
     pub unsafe extern "C" fn init_config(config: *mut lutec_setupState) {
-        unsafe extern "C" fn setup_lua_state(
-            wrapper: *mut lua_State_wrapper
-        ) {
+        unsafe extern "C" fn setup_lua_state(wrapper: *mut lua_State_wrapper) {
             let state = luaL_newstate();
             if state.is_null() {
                 return;
@@ -170,10 +188,10 @@ pub unsafe fn set_lute_state_initter() -> c_int {
             luaL_openlibs(state);
             (*wrapper).L = state;
         }
-    
+
         (*config).setup_lua_state = setup_lua_state;
     }
-    
+
     lutec_set_runtimeinitter(init_config)
 }
 
@@ -189,7 +207,7 @@ mod tests {
         unsafe {
             let state = luaL_newstate();
             assert!(!state.is_null());
-            
+
             // Enable JIT if supported
             #[cfg(not(target_os = "emscripten"))]
             if luau_codegen_supported() != 0 {
@@ -242,7 +260,7 @@ mod tests {
             assert!(!state.is_null());
             println!("state: {:?}", state);
             println!("gettop: {}", lua_gettop(state));
-            
+
             // Enable JIT if supported
             #[cfg(not(target_os = "emscripten"))]
             if luau_codegen_supported() != 0 {
@@ -251,17 +269,17 @@ mod tests {
 
             luaL_openlibs(state);
 
-                /*
-        {"@lute/crypto", luteopen_crypto},
-        {"@lute/fs", luteopen_fs},
-        {"@lute/luau", luteopen_luau},
-        {"@lute/net", luteopen_net},
-        {"@lute/process", luteopen_process},
-        {"@lute/task", luteopen_task},
-        {"@lute/vm", luteopen_vm},
-        {"@lute/system", luteopen_system},
-        {"@lute/time", luteopen_time},
-    */
+            /*
+                {"@lute/crypto", luteopen_crypto},
+                {"@lute/fs", luteopen_fs},
+                {"@lute/luau", luteopen_luau},
+                {"@lute/net", luteopen_net},
+                {"@lute/process", luteopen_process},
+                {"@lute/task", luteopen_task},
+                {"@lute/vm", luteopen_vm},
+                {"@lute/system", luteopen_system},
+                {"@lute/time", luteopen_time},
+            */
             //lutec_opencrypto(state);
             //lua_setglobal(state, c"crypto".as_ptr());
 
@@ -317,10 +335,7 @@ mod tests {
             lua_pushinteger(state, 321);
 
             if lua_pcall(state, 2, 1, 0) != 0 {
-                println!(
-                    "error running function `f-a': {}",
-                    to_string(state, -1)
-                );
+                println!("error running function `f-a': {}", to_string(state, -1));
             }
 
             assert_eq!(lua_tointegerx(state, -1, ptr::null_mut()), 5);
@@ -349,7 +364,11 @@ mod tests {
             free(bytecode.cast());
 
             // Create a lua thread
-            assert_eq!(std::ffi::CStr::from_ptr(lua_typename(state, lua_type(state, -1))).to_string_lossy(), "function");
+            assert_eq!(
+                std::ffi::CStr::from_ptr(lua_typename(state, lua_type(state, -1)))
+                    .to_string_lossy(),
+                "function"
+            );
             let thread = lua_newthread(state);
             assert!(!thread.is_null());
             // Push the function to the thread
@@ -369,68 +388,59 @@ mod tests {
             }
 
             let mut thread_result = None;
+            let mut i = 0;
             loop {
+                i += 1;
+
+                if i > 100 {
+                    println!("Breaking after 100 iterations");
+                    break;
+                }
+
+                println!("Current gettop: {}", lua_gettop(state));
                 // Check if lua_yield is called
                 if result == 1 {
                     println!("Current gettop: {}", lua_gettop(state));
                     // Run a loop of the scheduler
                     println!("lua_yield case");
 
-                    // Use lua_pcall to run the C lutec_run_once
-                    lua_pushcclosurek(
-                        state,
-                        lutec_run_once,
-                        ptr::null(),
-                        0,
-                        ptr::null(),
-                    );
-                    
-                    if lua_pcall(state, 0, 2, 0) != 0 {
-                        panic!("error");
-                        std::io::stdout().flush().unwrap();    
-                    }
+                    thread_result = Some(1);
+                    println!("called lutec_run_once");
                     std::io::stdout().flush().unwrap();
-
-                    if lua_isnumber(state, -2) == 0 {
-                        let typ = lua_typename(state, lua_type(state, -2));
-                        // Convert to string
-                        {
-                            let typ = std::ffi::CStr::from_ptr(typ);
-                            println!("Error: lutec_run_once did not return a number, type: {}", typ.to_string_lossy());
-                        }
+                    let run_once_result = lutec_run_once(state);
+                    if run_once_result.op == LUTE_STATE_MISSING_ERROR {
+                        println!("Lute state missing error");
+                        break;
+                    } else if run_once_result.op == LUTE_STATE_ERROR {
+                        println!("Lute state error");
+                        // Pop out the error message
+                        let error_message = to_string(run_once_result.state, -1);
+                        println!("Error message: {}", error_message);
+                        lua_settop(run_once_result.state, -2); // Pop the error message
+                        break;
+                    } else if run_once_result.op == LUTE_STATE_UNSUPPORTED_OP {
+                        println!("Lute state unsupported operation");
                         break;
                     }
 
-                    // Get out the result integer
-                    let result_int = lua_tointegerx(state, -2, ptr::null_mut());
-                    println!("result_int: {}", result_int);
+                    println!("HERE");
 
-                    if result_int == 1000 {
-                        println!("Nothing happened! Continue waiting...");
-                        while lua_gettop(state) > 0 {
-                            lua_settop(state, -2);
-                        }
-                        println!("gettop call two: {}", lua_gettop(state));
-                        std::io::stdout().flush().unwrap();
+                    if lutec_has_work(state) == 1 {
+                        println!("We still have work to do");
                         continue;
                     }
 
-                    if result_int == 3 {
-                        println!("Lute test completed");
-                        // Pop the value out of the thread
-                        let result = lua_tointegerx(thread, -1, ptr::null_mut());
-                        println!("result: {}", result);
-                        thread_result = Some(result);
-                        break;
-                    }
+                    println!("Lute test completed");
+                    // Pop the value out of the thread
+                    let result = lua_tointegerx(thread, -1, ptr::null_mut());
+                    println!("result: {}", result);
+                    thread_result = Some(result);
+                    break;
 
                     while lua_gettop(state) > 0 {
                         lua_settop(state, -2);
                     }
                     println!("gettop call three: {}", lua_gettop(state));
-
-                    std::io::stdout().flush().unwrap();
-                    //std::thread::sleep(std::time::Duration::from_secs(1));
                 } else {
                     break;
                 }

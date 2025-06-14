@@ -93,10 +93,10 @@ static void luteopen_lib(lua_State *L, const char *name)
 }*/
 
 #ifndef LUTE_DISABLE_CRYPTO
-	extern "C" int lutec_opencrypto(lua_State *L)
-	{
-    		return luteopen_crypto(L);
-	}
+extern "C" int lutec_opencrypto(lua_State *L)
+{
+    return luteopen_crypto(L);
+}
 #endif
 
 extern "C" int lutec_openfs(lua_State *L)
@@ -110,10 +110,10 @@ extern "C" int lutec_openluau(lua_State *L)
 }
 
 #ifndef LUTE_DISABLE_NET
-	extern "C" int lutec_opennet(lua_State *L)
-	{
-    		return luteopen_net(L);
-	}
+extern "C" int lutec_opennet(lua_State *L)
+{
+    return luteopen_net(L);
+}
 #endif
 
 extern "C" int lutec_openprocess(lua_State *L)
@@ -147,9 +147,8 @@ CliModuleResult getCliModule(std::string_view path)
     return {CliModuleType::NotFound};
 }
 
-
 // Needed for Lute.VM
-lua_State *setupState(Runtime &runtime, void (*)(lua_State*))
+lua_State *setupState(Runtime &runtime, void (*)(lua_State *))
 {
     printf("setupState called\n");
 
@@ -281,113 +280,87 @@ extern "C" int lutec_destroy_runtime(lua_State *L)
     }
 }
 
-// Wrapper to run one iteration of the Lute scheduler
-int lutec_run_once_internal(Runtime *runtime)
+extern "C" const int LUTE_STATE_MISSING_ERROR = 0;
+extern "C" const int LUTE_STATE_ERROR = 1;
+extern "C" const int LUTE_STATE_SUCCESS = 2;
+extern "C" const int LUTE_STATE_EMPTY = 3;
+extern "C" const int LUTE_STATE_UNSUPPORTED_OP = 4;
+
+extern "C" struct RunOnceResult
 {
-    uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+    int op = LUTE_STATE_UNSUPPORTED_OP; // Default to unsupported operation
+    lua_State *state = nullptr;         // The lua_State that was run, if applicable
+};
 
-    // luaL_error(runtime->GL, "Lute scheduler run_once called without a runtime");
-
-    // Complete all C++ continuations
-    std::vector<std::function<void()>> copy;
-
+// Wrapper to run one iteration of the Lute scheduler
+RunOnceResult lutec_run_once_internal(Runtime *runtime)
+{
+    auto step = runtime->runOnce();
+    if (auto err = Luau::get_if<StepErr>(&step))
     {
-        std::unique_lock lock(runtime->continuationMutex);
-        copy = std::move(runtime->continuations);
-        runtime->continuations.clear();
-    }
+        if (err->L == nullptr)
+        {
+            return RunOnceResult{
+                .op = LUTE_STATE_MISSING_ERROR,
+                .state = nullptr};
+        }
 
-    for (auto &&continuation : copy)
+        return RunOnceResult{
+            .op = LUTE_STATE_ERROR,
+            .state = err->L};
+    }
+    else if (auto success = Luau::get_if<StepSuccess>(&step))
     {
-        printf("Running continuation\n");
-        continuation();
+        return RunOnceResult{
+            .op = LUTE_STATE_SUCCESS,
+            .state = success->L};
     }
-
-    if (runtime->runningThreads.empty())
+    else if (Luau::get_if<StepEmpty>(&step))
     {
-        printf("No threads to run\n");
-        // Push code 1000 to indicate nothing to run
-        lua_pushinteger(runtime->GL, 1000);
-        lua_pushnil(runtime->GL);
-        return 2;
+        return RunOnceResult{
+            .op = LUTE_STATE_EMPTY,
+        };
     }
-
-    // Run the next thread
-    auto next = std::move(runtime->runningThreads.front());
-    runtime->runningThreads.erase(runtime->runningThreads.begin());
-
-    next.ref->push(runtime->GL);
-    lua_State *L = lua_tothread(runtime->GL, -1);
-
-    if (L == nullptr)
-    {
-        printf("ERROR: Cannot resume a non-thread reference\n");
-        luaL_error(runtime->GL, "Cannot resume a non-thread reference");
-        return -1;
-    }
-
-    // We still have 'next' on stack to hold on to thread we are about to run
-    lua_pop(runtime->GL, 1);
-
-    int status = LUA_OK;
-
-    printf("Running thread %p\n", L);
-
-    if (!next.success)
-        status = lua_resumeerror(L, nullptr);
     else
-        status = lua_resume(L, nullptr, next.argumentCount);
-
-    printf("Thread %p finished with status %d\n", L, status);
-
-    if (status == LUA_YIELD)
     {
-        // Yielding, continue to next iteration
-        printf("Thread yielded\n");
-        lua_pushinteger(L, LUA_YIELD);
-        lua_pushthread(L);
-        return 2;
+        return RunOnceResult{
+            .op = LUTE_STATE_UNSUPPORTED_OP,
+        };
     }
-
-    if (status != LUA_OK)
-    {
-        std::string error;
-
-        if (const char *str = lua_tostring(L, -1))
-            error = str;
-
-        error += "\nstacktrace:\n";
-        error += lua_debugtrace(L);
-
-        printf("ERROR: %s\n", error.c_str());
-        luaL_error(runtime->GL, "%s", error.c_str());
-        return -1;
-    }
-
-    if (next.cont)
-    {
-        printf("Running continuation\n");
-        next.cont();
-    }
-
-    printf("Pushing 3, nil to indicate thread finished\n");
-    lua_pushinteger(runtime->GL, 3);
-    lua_pushnil(runtime->GL);
-    return 2;
 }
 
-LUALIB_API int lutec_run_once(lua_State *L)
+LUALIB_API RunOnceResult lutec_run_once(lua_State *L)
 {
     printf("lutec_run_once called\n");
-
     Runtime *runtime = static_cast<Runtime *>(lua_getthreaddata(L));
 
     if (runtime == nullptr)
     {
-        printf("ERROR: Cannot run Lute scheduler without a runtime\n");
-        luaL_error(L, "Cannot run Lute scheduler without a runtime");
-        return -1;
+        return RunOnceResult{
+            .op = LUTE_STATE_MISSING_ERROR,
+        };
     }
 
     return lutec_run_once_internal(runtime);
+}
+
+LUALIB_API int lutec_has_work(lua_State *L)
+{
+    Runtime *runtime = static_cast<Runtime *>(lua_getthreaddata(L));
+
+    if (runtime == nullptr)
+    {
+        return 0;
+    }
+
+    bool result = runtime->hasWork();
+    printf("lutec_has_work called, result: %d\n", result);
+    if (result)
+    {
+        return 1; // There is work to do
+    }
+    else
+    {
+        return 0; // No work to do
+    }
 }
