@@ -2,7 +2,22 @@ use cmake::Config;
 
 use rustc_version::{version_meta, Channel};
 
-pub fn build_lute() {
+#[derive(Clone, Copy)]
+pub struct LConfig {
+    disable_crypto: bool,
+    disable_net: bool
+}
+
+impl Default for LConfig {
+    fn default() -> Self {
+        Self {
+            disable_crypto: true, // Takes too long to build
+            disable_net: true, // Takes too long to build
+        }
+    }
+}
+
+pub fn build_lute(lcfg: LConfig) {
     println!("cargo:rerun-if-changed=build.rs");
     //println!("cargo:rerun-if-changed=build_hash.txt");
 
@@ -87,6 +102,8 @@ pub fn build_lute() {
         .define("LUAU_EXTERN_C", "ON") // Provides DLUA_USE_LONGJMP, DLUA_API, LUACODE_API, LUACODEGEN_API
         .define("LUAU_STATIC_CRT", "ON")
         .define("LUAU_BUILD_STATIC", "ON")
+        .define("LUTE_DISABLE_NET", if lcfg.disable_net { "ON" } else { "OFF" } )
+        .define("LUTE_DISABLE_CRYPTO", if lcfg.disable_crypto { "ON" } else { "OFF" }  )
         .cxxflag("-DLUAI_MAXCSTACK=1000000")
         .cxxflag("-DLUA_UTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
         .cxxflag("-DLUA_LUTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
@@ -122,7 +139,9 @@ pub fn build_lute() {
     target_compile_definitions(Luau.CodeGen PUBLIC LUACODEGEN_API=extern\"C\")
     */
 
-    cc::Build::new()
+    let mut build = cc::Build::new();
+
+    build
         .cpp(true)
         .file("LuteExt/src/lopen.cpp")
         .include("lute/lute/cli/include")
@@ -147,7 +166,17 @@ pub fn build_lute() {
         .flag("-DLUACODEGEN_API=extern \"C\"")
         .flag("-DLUAI_MAXCSTACK=1000000")
         .flag("-DLUA_UTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
-        .flag("-DLUA_LUTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
+        .flag("-DLUA_LUTAG_LIMIT=256"); // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
+        
+    if lcfg.disable_net {
+        build.flag("-DLUTE_DISABLE_NET=1");
+    }
+
+    if lcfg.disable_crypto {
+        build.flag("-DLUTE_DISABLE_CRYPTO=1");
+    }
+
+    build
         .flag("-fexceptions")
         .compile("Luau.LuteExt");
 
@@ -156,10 +185,13 @@ pub fn build_lute() {
         "cargo:rustc-link-search=native={}/build/extern/luau",
         dst.display()
     );
-    println!(
-        "cargo:rustc-link-search=native={}/build/lute/crypto",
-        dst.display()
-    );
+
+    if !lcfg.disable_crypto {
+        println!(
+            "cargo:rustc-link-search=native={}/build/lute/crypto",
+            dst.display()
+        );
+    }
     println!(
         "cargo:rustc-link-search=native={}/build/lute/fs",
         dst.display()
@@ -168,10 +200,12 @@ pub fn build_lute() {
         "cargo:rustc-link-search=native={}/build/lute/luau",
         dst.display()
     );
-    println!(
-        "cargo:rustc-link-search=native={}/build/lute/net",
-        dst.display()
-    );
+    if !lcfg.disable_net {
+        println!(
+            "cargo:rustc-link-search=native={}/build/lute/net",
+            dst.display()
+        );
+    }
     println!(
         "cargo:rustc-link-search=native={}/build/lute/process",
         dst.display()
@@ -215,10 +249,14 @@ pub fn build_lute() {
     println!("cargo:rustc-link-lib=static=Luau.Require");
     println!("cargo:rustc-link-lib=static=Luau.RequireNavigator");
     println!("cargo:rustc-link-lib=static=Luau.VM");
-    println!("cargo:rustc-link-lib=static=Lute.Crypto");
+    if !lcfg.disable_crypto {
+        println!("cargo:rustc-link-lib=static=Lute.Crypto");
+    }
     println!("cargo:rustc-link-lib=static=Lute.Fs");
     println!("cargo:rustc-link-lib=static=Lute.Luau");
-    println!("cargo:rustc-link-lib=static=Lute.Net");
+    if !lcfg.disable_crypto {
+        println!("cargo:rustc-link-lib=static=Lute.Net");
+    }
     println!("cargo:rustc-link-lib=static=Lute.Process");
     println!("cargo:rustc-link-lib=static=Lute.Runtime");
     println!("cargo:rustc-link-lib=static=Lute.Require");
@@ -227,32 +265,43 @@ pub fn build_lute() {
     println!("cargo:rustc-link-lib=static=Lute.Task");
     println!("cargo:rustc-link-lib=static=Lute.Time");
     println!("cargo:rustc-link-lib=static=Lute.VM");
-    println!("cargo:rustc-link-lib=static=uSockets");
+    
+    if !lcfg.disable_net {
+        println!("cargo:rustc-link-lib=static=uSockets");
+    }
 
     // boringssl
     println!(
         "cargo:rustc-link-search=native={}/build/extern/boringssl",
         dst.display()
     );
-    println!("cargo:rustc-link-lib=static=crypto");
-    println!("cargo:rustc-link-lib=static=decrepit");
-    println!("cargo:rustc-link-lib=static=pki");
-    println!("cargo:rustc-link-lib=static=ssl");
-    println!("cargo:rustc-link-lib=static=sodium");
 
-    // curl
-    println!(
-        "cargo:rustc-link-search=native={}/build/extern/curl/lib",
-        dst.display()
-    );
+    if !lcfg.disable_net || !lcfg.disable_crypto {
+        println!("cargo:rustc-link-lib=static=crypto");
+        println!("cargo:rustc-link-lib=static=decrepit");
+        println!("cargo:rustc-link-lib=static=pki");
+        println!("cargo:rustc-link-lib=static=ssl");
+        println!("cargo:rustc-link-lib=static=sodium");
+    }
 
-    // Debug
-    let binding = Config::new("lute");
-    let profile = binding.get_profile();
-    if profile == "Debug" {
-        println!("cargo:rustc-link-lib=static=curl-d");
-    } else {
-        println!("cargo:rustc-link-lib=static=curl");
+    if !lcfg.disable_net {
+        // curl
+        println!(
+            "cargo:rustc-link-search=native={}/build/extern/curl/lib",
+            dst.display()
+        );
+    }
+
+    
+    if !lcfg.disable_net {
+        // Curl
+        let binding = Config::new("lute");
+        let profile = binding.get_profile();
+        if profile == "Debug" {
+            println!("cargo:rustc-link-lib=static=curl-d");
+        } else {
+            println!("cargo:rustc-link-lib=static=curl");
+        }
     }
 
     // libuv
@@ -263,9 +312,11 @@ pub fn build_lute() {
     println!("cargo:rustc-link-lib=static=uv");
 
     // zlib (system)
-    println!(
-        "cargo:rustc-link-search=native={}/build/extern/zlib",
-        dst.display()
-    );
-    println!("cargo:rustc-link-lib=z");
+    if !lcfg.disable_net {
+        println!(
+            "cargo:rustc-link-search=native={}/build/extern/zlib",
+            dst.display()
+        );
+        println!("cargo:rustc-link-lib=z");
+    }
 }

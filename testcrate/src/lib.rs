@@ -28,10 +28,10 @@ extern "C" {
     pub fn luaL_newstate() -> *mut c_void;
     pub fn lua_close(state: *mut c_void);
     pub fn luaL_openlibs(state: *mut c_void);
-    pub fn lutec_opencrypto(state: *mut c_void);
+    //pub fn lutec_opencrypto(state: *mut c_void);
     pub fn lutec_openfs(state: *mut c_void);
     pub fn lutec_openluau(state: *mut c_void);
-    pub fn lutec_opennet(state: *mut c_void);
+    //pub fn lutec_opennet(state: *mut c_void);
     pub fn lutec_openprocess(state: *mut c_void);
     pub fn lutec_opentask(state: *mut c_void);
     pub fn lutec_openvm(state: *mut c_void);
@@ -262,8 +262,8 @@ mod tests {
         {"@lute/system", luteopen_system},
         {"@lute/time", luteopen_time},
     */
-            lutec_opencrypto(state);
-            lua_setglobal(state, c"crypto".as_ptr());
+            //lutec_opencrypto(state);
+            //lua_setglobal(state, c"crypto".as_ptr());
 
             lutec_openfs(state);
             lua_setglobal(state, c"fs".as_ptr());
@@ -271,8 +271,8 @@ mod tests {
             lutec_openluau(state);
             lua_setglobal(state, c"luau".as_ptr());
 
-            lutec_opennet(state);
-            lua_setglobal(state, c"net".as_ptr());
+            //lutec_opennet(state);
+            //lua_setglobal(state, c"net".as_ptr());
 
             lutec_openprocess(state);
             lua_setglobal(state, c"process".as_ptr());

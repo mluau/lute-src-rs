@@ -92,10 +92,12 @@ static void luteopen_lib(lua_State *L, const char *name)
     }};
 }*/
 
-extern "C" int lutec_opencrypto(lua_State *L)
-{
-    return luteopen_crypto(L);
-}
+#ifndef LUTE_DISABLE_CRYPTO
+	extern "C" int lutec_opencrypto(lua_State *L)
+	{
+    		return luteopen_crypto(L);
+	}
+#endif
 
 extern "C" int lutec_openfs(lua_State *L)
 {
@@ -107,10 +109,12 @@ extern "C" int lutec_openluau(lua_State *L)
     return luteopen_luau(L);
 }
 
-extern "C" int lutec_opennet(lua_State *L)
-{
-    return luteopen_net(L);
-}
+#ifndef LUTE_DISABLE_NET
+	extern "C" int lutec_opennet(lua_State *L)
+	{
+    		return luteopen_net(L);
+	}
+#endif
 
 extern "C" int lutec_openprocess(lua_State *L)
 {
