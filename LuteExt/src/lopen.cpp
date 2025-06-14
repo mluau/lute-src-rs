@@ -230,12 +230,6 @@ extern "C" int lutec_destroy_runtime(lua_State *L)
 {
     Runtime *runtime = static_cast<Runtime *>(lua_getthreaddata(L));
 
-    lua_gc(L, LUA_GCCOLLECT, 2);
-    lua_gc(L, LUA_GCCOLLECT, 2);
-    lua_gc(L, LUA_GCCOLLECT, 0);
-    lua_gc(L, LUA_GCCOLLECT, 0);
-    lua_gc(L, LUA_GCCOLLECT, 0);
-
     printf("Destroying Lute runtime\n");
 
     if (runtime)
@@ -268,9 +262,6 @@ extern "C" int lutec_destroy_runtime(lua_State *L)
         // Run 2 gc cycles to clean up the memory
         lua_gc(L, LUA_GCCOLLECT, 2);
         lua_gc(L, LUA_GCCOLLECT, 2);
-        lua_gc(L, LUA_GCCOLLECT, 0);
-        lua_gc(L, LUA_GCCOLLECT, 0);
-        lua_gc(L, LUA_GCCOLLECT, 0);
 
         return 0;
     }
@@ -331,7 +322,6 @@ RunOnceResult lutec_run_once_internal(Runtime *runtime)
 
 LUALIB_API RunOnceResult lutec_run_once(lua_State *L)
 {
-    printf("lutec_run_once called\n");
     Runtime *runtime = static_cast<Runtime *>(lua_getthreaddata(L));
 
     if (runtime == nullptr)
@@ -354,7 +344,6 @@ LUALIB_API int lutec_has_work(lua_State *L)
     }
 
     bool result = runtime->hasWork();
-    printf("lutec_has_work called, result: %d\n", result);
     if (result)
     {
         return 1; // There is work to do
