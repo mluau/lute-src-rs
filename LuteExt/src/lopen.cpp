@@ -311,7 +311,6 @@ LUALIB_API int lutec_run_once_lua(lua_State *L)
     case LUTE_STATE_MISSING_ERROR:
         luaL_errorL(L, "Missing lua state");
     case LUTE_STATE_ERROR:
-        printf("Got error state");
         lua_xmove(ror.state, L, 1);
         lua_error(L);
     case LUTE_STATE_SUCCESS:
