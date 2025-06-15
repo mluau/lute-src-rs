@@ -22,7 +22,6 @@ typedef struct
 struct lutec_setupState
 {
     void (*setup_lua_state)(lua_State_wrapper *L);
-    void (*post_init_lua_state)(lua_State *parent, lua_State *L);
 };
 
 // Populates function pointers in the given lute_setupState.
@@ -45,7 +44,7 @@ extern "C" int lutec_set_runtimeinitter(lutec_setupState_init config_init)
 
     config_init(lute_setup_ptr); // SAFETY: lute_setup is allocated on the heap
 
-    if (lute_setup_ptr->setup_lua_state == nullptr || lute_setup_ptr->post_init_lua_state == nullptr)
+    if (lute_setup_ptr->setup_lua_state == nullptr)
     {
         delete lute_setup_ptr; // Clean up if the setup state is invalid
         lute_setup_ptr = nullptr;
@@ -172,14 +171,6 @@ lua_State *setupState(lua_State *parent, Runtime &runtime, void (*doBeforeSandbo
     runtime.GL = L;
 
     lua_setthreaddata(L, &runtime);
-
-    // Call part two of the initter to do rest of setup + sandboxing
-    if (lutec_setup->post_init_lua_state)
-    {
-        lua_State *DC = runtime.dataCopy.get();
-        lutec_setup->post_init_lua_state(parent, DC);
-        lutec_setup->post_init_lua_state(parent, L);
-    }
 
     return L;
 }

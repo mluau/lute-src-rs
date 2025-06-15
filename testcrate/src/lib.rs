@@ -148,7 +148,6 @@ pub struct lua_State_wrapper {
 #[repr(C)]
 pub struct lutec_setupState {
     pub setup_lua_state: unsafe extern "C-unwind" fn(wrapper: *mut lua_State_wrapper),
-    pub post_init_lua_state: unsafe extern "C-unwind" fn(parent: *mut c_void, L: *mut c_void),
 }
 
 // Populates function pointers in the given lutec_setupState.
@@ -197,12 +196,7 @@ pub unsafe fn set_lute_state_initter() -> c_int {
             (*wrapper).L = state;
         }
 
-        unsafe extern "C-unwind" fn post_init_lua_state(parent: *mut c_void, L: *mut c_void) {
-            println!("Post-initialization Lua state setup");
-        }
-
         (*config).setup_lua_state = setup_lua_state;
-        (*config).post_init_lua_state = post_init_lua_state;
     }
 
     lutec_set_runtimeinitter(init_config)
