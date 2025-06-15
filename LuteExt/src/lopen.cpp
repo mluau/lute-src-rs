@@ -21,7 +21,6 @@ typedef struct
 
 struct lutec_setupState
 {
-    // Returns a new lua_State that has been setup by the caller
     void (*setup_lua_state)(lua_State_wrapper *L);
     void (*post_init_lua_state)(lua_State *parent, lua_State *L);
 };
@@ -31,8 +30,12 @@ typedef void (*lutec_setupState_init)(lutec_setupState *config);
 
 static lutec_setupState *lutec_setup = nullptr;
 
+std::mutex mutex;
+
 extern "C" int lutec_set_runtimeinitter(lutec_setupState_init config_init)
 {
+    std::lock_guard<std::mutex> lock(mutex);
+
     if (lutec_setup)
     {
         return 0; // No-op
@@ -137,6 +140,8 @@ lua_State *setupState(lua_State *parent, Runtime &runtime, void (*doBeforeSandbo
     // Make data copy VM
     lua_State_wrapper *lua_state_wrapper = new lua_State_wrapper();
     lua_state_wrapper->parent = parent;
+
+    std::lock_guard<std::mutex> lock(mutex);
 
     lutec_setup->setup_lua_state(lua_state_wrapper);
 
