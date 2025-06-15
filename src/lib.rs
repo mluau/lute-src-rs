@@ -99,7 +99,7 @@ pub fn build_lute(lcfg: LConfig) {
     }
 
     let dst = Config::new("lute")
-        .profile("RelWithDebInfo") // Debug builds tend to be extremely slow and nearly unusable in practice
+        .profile("Release") // Debug builds tend to be extremely slow and nearly unusable in practice
         .define("LUAU_EXTERN_C", "ON") // Provides DLUA_USE_LONGJMP, DLUA_API, LUACODE_API, LUACODEGEN_API
         .define("LUAU_STATIC_CRT", "ON")
         .define("LUAU_BUILD_STATIC", "ON")
