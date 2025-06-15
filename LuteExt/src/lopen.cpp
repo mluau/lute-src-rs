@@ -339,7 +339,6 @@ LUALIB_API int lutec_has_work(lua_State *L)
     bool result = runtime->hasWork();
     if (result == true)
     {
-        printf("Lute runtime has work to do\n");
         return 1; // There is work to do
     }
     else
