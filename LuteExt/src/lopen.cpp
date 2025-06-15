@@ -171,18 +171,6 @@ lua_State *setupState(lua_State *parent, Runtime &runtime, void (*doBeforeSandbo
 
     runtime.GL = L;
 
-    // register the builtin tables
-    luaL_openlibs(L);
-
-    lua_pushnil(L);
-    lua_setglobal(L, "setfenv");
-
-    lua_pushnil(L);
-    lua_setglobal(L, "getfenv");
-
-    if (doBeforeSandbox)
-        doBeforeSandbox(L);
-
     lua_setthreaddata(L, &runtime);
 
     // Call part two of the initter to do rest of setup + sandboxing
