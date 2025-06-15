@@ -188,6 +188,7 @@ lua_State *setupState(lua_State *parent, Runtime &runtime, void (*doBeforeSandbo
     // Call part two of the initter to do rest of setup + sandboxing
     if (lutec_setup->post_init_lua_state)
     {
+        lua_State *DC = runtime.dataCopy.get();
         lutec_setup->post_init_lua_state(parent, DC);
         lutec_setup->post_init_lua_state(parent, L);
     }
