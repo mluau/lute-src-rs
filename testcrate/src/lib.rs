@@ -140,13 +140,15 @@ typedef struct
 
 #[repr(C)]
 pub struct lua_State_wrapper {
+    pub parent: *mut c_void,
     pub L: *mut c_void,
 }
 
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct lutec_setupState {
-    pub setup_lua_state: unsafe extern "C" fn(wrapper: *mut lua_State_wrapper),
+    pub setup_lua_state: unsafe extern "C-unwind" fn(wrapper: *mut lua_State_wrapper),
+    pub post_init_lua_state: unsafe extern "C-unwind" fn(parent: *mut c_void, L: *mut c_void),
 }
 
 // Populates function pointers in the given lutec_setupState.
@@ -186,7 +188,7 @@ pub unsafe fn to_string<'a>(state: *mut c_void, index: c_int) -> &'a str {
 
 pub unsafe fn set_lute_state_initter() -> c_int {
     pub unsafe extern "C" fn init_config(config: *mut lutec_setupState) {
-        unsafe extern "C" fn setup_lua_state(wrapper: *mut lua_State_wrapper) {
+        unsafe extern "C-unwind" fn setup_lua_state(wrapper: *mut lua_State_wrapper) {
             let state = luaL_newstate();
             if state.is_null() {
                 return;
@@ -195,7 +197,12 @@ pub unsafe fn set_lute_state_initter() -> c_int {
             (*wrapper).L = state;
         }
 
+        unsafe extern "C-unwind" fn post_init_lua_state(parent: *mut c_void, L: *mut c_void) {
+            println!("Post-initialization Lua state setup");
+        }
+
         (*config).setup_lua_state = setup_lua_state;
+        (*config).post_init_lua_state = post_init_lua_state;
     }
 
     lutec_set_runtimeinitter(init_config)

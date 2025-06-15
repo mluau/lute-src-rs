@@ -15,6 +15,7 @@
 
 typedef struct
 {
+    lua_State *parent;
     lua_State *L;
 } lua_State_wrapper;
 
@@ -22,6 +23,7 @@ struct lutec_setupState
 {
     // Returns a new lua_State that has been setup by the caller
     void (*setup_lua_state)(lua_State_wrapper *L);
+    void (*post_init_lua_state)(lua_State *parent, lua_State *L);
 };
 
 // Populates function pointers in the given lute_setupState.
@@ -29,48 +31,30 @@ typedef void (*lutec_setupState_init)(lutec_setupState *config);
 
 static lutec_setupState *lutec_setup = nullptr;
 
-extern "C" int LUTEC_RUNTIMEINITTER_OK = 0;
-extern "C" int LUTEC_RUNTIMEINITTER_CANNOT_MODIFY_ONCE_SET = -1;
-extern "C" int LUTEC_RUNTIMEINITTER_INVALID_SETUP_STATE = -2;
-extern "C" int LUTEC_RUNTIMEINITTER_INVALID_SETUP_STATE_RESPONSE = -3;
-extern "C" int LUTEC_RUNTIMEINITTER_INVALID_LUA_STATE = -4;
-
 extern "C" int lutec_set_runtimeinitter(lutec_setupState_init config_init)
 {
     if (lutec_setup)
     {
-        return LUTEC_RUNTIMEINITTER_CANNOT_MODIFY_ONCE_SET; // Cannot modify the setup state after it has been set
+        return 0; // No-op
     }
     if (!config_init)
     {
-        return LUTEC_RUNTIMEINITTER_INVALID_SETUP_STATE; // Invalid setup state
+        return 1; // Invalid setup state
     }
 
     lutec_setupState *lute_setup_ptr = new lutec_setupState();
 
     config_init(lute_setup_ptr); // SAFETY: lute_setup is allocated on the heap
 
-    if (lute_setup_ptr->setup_lua_state == nullptr)
+    if (lute_setup_ptr->setup_lua_state == nullptr || lute_setup_ptr->post_init_lua_state == nullptr)
     {
-        delete lute_setup_ptr;
+        delete lute_setup_ptr; // Clean up if the setup state is invalid
         lute_setup_ptr = nullptr;
-        return LUTEC_RUNTIMEINITTER_INVALID_SETUP_STATE_RESPONSE; // Invalid setup state response
+        return 2; // Invalid setup state
     }
     lutec_setup = lute_setup_ptr;
-    // Test by calling the setup_lua_state function
-    lua_State_wrapper *lua_state_wrapper = new lua_State_wrapper();
 
-    lutec_setup->setup_lua_state(lua_state_wrapper);
-
-    lua_State *L = lua_state_wrapper->L;
-    if (L == nullptr)
-    {
-        delete lute_setup_ptr;
-        lutec_setup = nullptr;
-        return LUTEC_RUNTIMEINITTER_INVALID_LUA_STATE; // Invalid lua_State
-    }
-
-    return LUTEC_RUNTIMEINITTER_OK; // Successfully set up the runtime
+    return 0; // Successfully set up the runtime
 }
 
 /*
@@ -148,10 +132,11 @@ CliModuleResult getCliModule(std::string_view path)
 }
 
 // Needed for Lute.VM
-lua_State *setupState(Runtime &runtime, void (*)(lua_State *))
+lua_State *setupState(lua_State *parent, Runtime &runtime, void (*doBeforeSandbox)(lua_State *))
 {
     // Make data copy VM
     lua_State_wrapper *lua_state_wrapper = new lua_State_wrapper();
+    lua_state_wrapper->parent = parent;
 
     lutec_setup->setup_lua_state(lua_state_wrapper);
 
@@ -170,6 +155,7 @@ lua_State *setupState(Runtime &runtime, void (*)(lua_State *))
 
     // Create the main VM
     lua_State_wrapper *lua_state_wrapper_main = new lua_State_wrapper();
+    lua_state_wrapper_main->parent = parent;
     lutec_setup->setup_lua_state(lua_state_wrapper_main);
     lua_State *L = std::move(lua_state_wrapper_main->L);
     if (L == nullptr)
@@ -186,12 +172,26 @@ lua_State *setupState(Runtime &runtime, void (*)(lua_State *))
 
     runtime.GL = L;
 
-    lua_setthreaddata(L, &runtime);
-
     // register the builtin tables
     luaL_openlibs(L);
 
-    luaL_sandbox(L);
+    lua_pushnil(L);
+    lua_setglobal(L, "setfenv");
+
+    lua_pushnil(L);
+    lua_setglobal(L, "getfenv");
+
+    if (doBeforeSandbox)
+        doBeforeSandbox(L);
+
+    lua_setthreaddata(L, &runtime);
+
+    // Call part two of the initter to do rest of setup + sandboxing
+    if (lutec_setup->post_init_lua_state)
+    {
+        lutec_setup->post_init_lua_state(parent, DC);
+        lutec_setup->post_init_lua_state(parent, L);
+    }
 
     return L;
 }
