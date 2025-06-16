@@ -137,9 +137,9 @@ lua_State *setupState(lua_State *parent, Runtime &runtime, void (*doBeforeSandbo
     // Make lua_State_wrapper to hold the Lua state and data copy VM that setup_lua_state will fill in
     lua_State_wrapper *lua_state_wrapper = new lua_State_wrapper();
     lua_state_wrapper->parent = parent;
-    lua_state_wrapper->L = nullptr;              // Initialize to nullptr explicitly
-    lua_state_wrapper->DC = nullptr;             // Data copy VM, initialize to nullptr explicitly as the setup_lua_state will set it
-    lua_state_wrapper->runtime_to_set = nullptr; // No runtime to set for data copy VM
+    lua_state_wrapper->L = nullptr;               // Initialize to nullptr explicitly
+    lua_state_wrapper->DC = nullptr;              // Data copy VM, initialize to nullptr explicitly as the setup_lua_state will set it
+    lua_state_wrapper->runtime_to_set = &runtime; // Set the runtime to set
 
     lutec_setup->setup_lua_state(lua_state_wrapper);
 
@@ -189,17 +189,6 @@ extern "C" void lutec_setup_runtime(lua_State *L)
 
     lua_setthreaddata(L, runtime);
     return;
-}
-
-// Wrapper to setup a known Lute runtime into the Lua state
-extern "C" void lutec_setup_known_runtime(lua_State *L, Runtime *runtime)
-{
-    if (runtime == nullptr)
-    {
-        return;
-    }
-
-    lua_setthreaddata(L, runtime);
 }
 
 // Wrapper to destroy the Lute runtime inside the lua_State
