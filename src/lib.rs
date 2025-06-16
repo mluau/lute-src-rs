@@ -1,6 +1,7 @@
 use cmake::Config;
 
 use rustc_version::{version_meta, Channel};
+use std::env::current_dir;
 
 #[derive(Clone, Copy)]
 pub struct LConfig {
@@ -15,6 +16,17 @@ impl Default for LConfig {
             disable_net: true, // Takes too long to build
         }
     }
+}
+
+fn does_lute_exist(cmd: &str) -> bool {
+    let Ok(cmd) = std::process::Command::new(cmd)
+    .arg("run")
+    .arg("test.luau")
+    .status() else {
+        return false; // Command not found
+    };
+
+    cmd.success() // If the command exists, it should return success
 }
 
 pub fn build_lute(lcfg: LConfig) {
@@ -41,16 +53,26 @@ pub fn build_lute(lcfg: LConfig) {
 
     // Check that python is installed, error if not. This is needed
     // for luthier.py to fetch dependencies
-    if std::process::Command::new("python3")
-        .arg("--version")
-        .output()
-        .is_err()
-    {
-        panic!("Python 3 is required to build the lute runtime");
-    }
+    let lute = if does_lute_exist("lute") {
+            "lute".to_string()
+        } else if does_lute_exist("lute.exe") {
+            "lute.exe".to_string()
+        } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+            format!("{}/lute-bins/lute-windows-x86_64.exe", current_dir().unwrap().display()) // prebuilt lute binary for Windows x86_64
+        } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+            format!("{}/lute-bins/lute-linux-x86_64", current_dir().unwrap().display()) // prebuilt lute binary for Linux x86_64
+        } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+            format!("{}/lute-bins/lute-linux-aarch64", current_dir().unwrap().display()) // prebuilt lute binary for Linux aarch64
+        } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+            format!("{}/lute-bins/lute-macos-aarch64", current_dir().unwrap().display()) // prebuilt lute binary for macOS aarch64
+        } else {
+            panic!("Lute binary not found and pre-built binaries are not available for this platform. Please build Lute manually and add it to your path as it is required for bootstrapping itself.");
+        };
+
+    println!("Using lute binary: {}", lute);
 
     // Use tools/luthier.py in the lute folder to fetch dependencies
-    let output = std::process::Command::new("lute")
+    let output = std::process::Command::new(&lute)
         .current_dir("lute")
         .arg("tools/luthier.luau")
         .arg("fetch")
@@ -65,7 +87,7 @@ pub fn build_lute(lcfg: LConfig) {
         );
     }
 
-    let output = std::process::Command::new("lute")
+    let output = std::process::Command::new(lute)
         .current_dir("lute")
         .arg("tools/luthier.luau")
         .arg("generate")
