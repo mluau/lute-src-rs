@@ -30,9 +30,6 @@ fn does_lute_exist(cmd: &str) -> bool {
 }
 
 pub fn build_lute(lcfg: LConfig) {
-    println!("cargo:rerun-if-changed=build.rs");
-    //println!("cargo:rerun-if-changed=build_hash.txt");
-
     println!("cargo:rustc-env=LUAU_VERSION=0.677"); // TODO: Update when needed
 
     // On non-nightly builds, we need to use the lld linker
@@ -45,64 +42,69 @@ pub fn build_lute(lcfg: LConfig) {
 
     // Switch directory to CARGO_MANIFEST_DIR
     std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")).unwrap();
-    // This is needed to run the luthier.py script
-    println!(
-        "Current directory: {}",
-        std::env::current_dir().unwrap().display()
-    );
-
-    // Check that python is installed, error if not. This is needed
-    // for luthier.py to fetch dependencies
-    let lute = if does_lute_exist("lute") {
-            "lute".to_string()
-        } else if does_lute_exist("lute.exe") {
-            "lute.exe".to_string()
-        } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
-            format!("{}/lute-bins/lute-windows-x86_64.exe", current_dir().unwrap().display()) // prebuilt lute binary for Windows x86_64
-        } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-            format!("{}/lute-bins/lute-linux-x86_64", current_dir().unwrap().display()) // prebuilt lute binary for Linux x86_64
-        } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
-            format!("{}/lute-bins/lute-linux-aarch64", current_dir().unwrap().display()) // prebuilt lute binary for Linux aarch64
-        } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-            format!("{}/lute-bins/lute-macos-aarch64", current_dir().unwrap().display()) // prebuilt lute binary for macOS aarch64
-        } else {
-            panic!("Lute binary not found and pre-built binaries are not available for this platform. Please build Lute manually and add it to your path as it is required for bootstrapping itself.");
-        };
-
-    println!("Using lute binary: {}", lute);
-
-    // Use tools/luthier.py in the lute folder to fetch dependencies
-    let output = std::process::Command::new(&lute)
-        .current_dir("lute")
-        .arg("tools/luthier.luau")
-        .arg("fetch")
-        .arg("lute")
-        .output()
-        .expect("Failed to run tools/luthier.py fetch lute");
-
-    if !output.status.success() {
-        panic!(
-            "Failed to run tools/luthier.py fetch lute with stderr: {}",
-            String::from_utf8_lossy(&output.stderr)
+        // This is needed to run the luthier.py script
+        println!(
+            "Current directory: {}",
+            std::env::current_dir().unwrap().display()
         );
+
+        // Check for lute/.done_luthier file to see if we need to run luthier.luau (which is slow)
+        let lute_done_path = std::path::Path::new("lute/.done_luthier");
+        if !lute_done_path.exists() {
+        // Check that python is installed, error if not. This is needed
+        // for luthier.py to fetch dependencies
+        let lute = if does_lute_exist("lute") {
+                "lute".to_string()
+            } else if does_lute_exist("lute.exe") {
+                "lute.exe".to_string()
+            } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+                format!("{}/lute-bins/lute-windows-x86_64.exe", current_dir().unwrap().display()) // prebuilt lute binary for Windows x86_64
+            } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+                format!("{}/lute-bins/lute-linux-x86_64", current_dir().unwrap().display()) // prebuilt lute binary for Linux x86_64
+            } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+                format!("{}/lute-bins/lute-linux-aarch64", current_dir().unwrap().display()) // prebuilt lute binary for Linux aarch64
+            } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+                format!("{}/lute-bins/lute-macos-aarch64", current_dir().unwrap().display()) // prebuilt lute binary for macOS aarch64
+            } else {
+                panic!("Lute binary not found and pre-built binaries are not available for this platform. Please build Lute manually and add it to your path as it is required for bootstrapping itself.");
+            };
+
+        println!("Using lute binary: {}", lute);
+
+        // Use tools/luthier.py in the lute folder to fetch dependencies
+        let output = std::process::Command::new(&lute)
+            .current_dir("lute")
+            .arg("tools/luthier.luau")
+            .arg("fetch")
+            .arg("lute")
+            .output()
+            .expect("Failed to run tools/luthier.py fetch lute");
+
+        if !output.status.success() {
+            panic!(
+                "Failed to run tools/luthier.py fetch lute with stderr: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        let output = std::process::Command::new(lute)
+            .current_dir("lute")
+            .arg("tools/luthier.luau")
+            .arg("generate")
+            .arg("lute")
+            .output()
+            .expect("Failed to run tools/luthier.py fetch lute");
+
+        if !output.status.success() {
+            panic!(
+                "Failed to run tools/luthier.py generate lute with stderr: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        // Create the .done_luthier file to indicate that luthier.py has been run
+        std::fs::File::create(lute_done_path).expect("Failed to create .done_luthier file");
     }
-
-    let output = std::process::Command::new(lute)
-        .current_dir("lute")
-        .arg("tools/luthier.luau")
-        .arg("generate")
-        .arg("lute")
-        .output()
-        .expect("Failed to run tools/luthier.py fetch lute");
-
-    if !output.status.success() {
-        panic!(
-            "Failed to run tools/luthier.py generate lute with stderr: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    //panic!("Cannot build lute runtime yet, please run `cargo build` manually");
 
     // Configure C++
     let mut config = cc::Build::new();
