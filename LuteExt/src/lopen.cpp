@@ -17,7 +17,7 @@ typedef struct
 {
     lua_State *parent;
     lua_State *L = nullptr;         // Initialize to nullptr explicitly
-    int is_data_copy = 0;           // 1 if this is a data copy VM, 0 if this is the main VM
+    lua_State *DC = nullptr;        // Data copy VM, initialize to nullptr explicitly
     void *runtime_to_set = nullptr; // Pointer to the runtime to set, if needed
 } lua_State_wrapper;
 
@@ -134,55 +134,34 @@ CliModuleResult getCliModule(std::string_view path)
 // Needed for Lute.VM
 lua_State *setupState(lua_State *parent, Runtime &runtime, void (*doBeforeSandbox)(lua_State *))
 {
-    // Make data copy VM
+    // Make lua_State_wrapper to hold the Lua state and data copy VM that setup_lua_state will fill in
     lua_State_wrapper *lua_state_wrapper = new lua_State_wrapper();
     lua_state_wrapper->parent = parent;
     lua_state_wrapper->L = nullptr;              // Initialize to nullptr explicitly
+    lua_state_wrapper->DC = nullptr;             // Data copy VM, initialize to nullptr explicitly as the setup_lua_state will set it
     lua_state_wrapper->runtime_to_set = nullptr; // No runtime to set for data copy VM
-    lua_state_wrapper->is_data_copy = 1;         // We are making a data copy VM
 
     lutec_setup->setup_lua_state(lua_state_wrapper);
 
-    // SAFETY: We've verified
-    lua_State *DC = std::move(lua_state_wrapper->L);
-    if (DC == nullptr)
+    lua_State *L = std::move(lua_state_wrapper->L);
+    lua_State *DC = std::move(lua_state_wrapper->DC);
+
+    delete lua_state_wrapper; // We can delete the wrapper now
+
+    if (L == nullptr || DC == nullptr)
     {
-        delete lua_state_wrapper;
         return nullptr; // Invalid setup state
     }
 
-    // Separate VM for data copies
-    runtime.dataCopy.reset(DC);
-
-    // Drop lua_state_wrapper
-    delete lua_state_wrapper;
-
-    // Create the main VM
-    lua_State_wrapper *lua_state_wrapper_main = new lua_State_wrapper();
-    lua_state_wrapper_main->parent = parent;
-    lua_state_wrapper_main->L = nullptr;               // Initialize to nullptr explicitly
-    lua_state_wrapper_main->is_data_copy = 0;          // This is the main VM
-    lua_state_wrapper_main->runtime_to_set = &runtime; // Set the runtime to be used in the main VM
-    lutec_setup->setup_lua_state(lua_state_wrapper_main);
-    lua_State *L = std::move(lua_state_wrapper_main->L);
-    if (L == nullptr)
-    {
-        delete lua_state_wrapper_main;
-        return nullptr; // Invalid setup state
-    }
-
-    runtime.globalState.reset(L);
-
-    delete lua_state_wrapper_main;
-
-    L = runtime.globalState.get();
-
-    runtime.GL = L;
-
-    // Ensure setup_lua_state has set the thread data
+    // Ensure setup_lua_state has set the thread data on L before returning
     Runtime *existingRuntime = static_cast<Runtime *>(lua_getthreaddata(L));
     if (!existingRuntime)
         return nullptr; // Thread data already set, cannot set runtime
+
+    runtime.dataCopy.reset(DC);
+    runtime.globalState.reset(L);
+    L = runtime.globalState.get();
+    runtime.GL = L;
 
     return L;
 }
@@ -210,6 +189,17 @@ extern "C" void lutec_setup_runtime(lua_State *L)
 
     lua_setthreaddata(L, runtime);
     return;
+}
+
+// Wrapper to setup a known Lute runtime into the Lua state
+extern "C" void lutec_setup_known_runtime(lua_State *L, Runtime *runtime)
+{
+    if (runtime == nullptr)
+    {
+        return;
+    }
+
+    lua_setthreaddata(L, runtime);
 }
 
 // Wrapper to destroy the Lute runtime inside the lua_State
