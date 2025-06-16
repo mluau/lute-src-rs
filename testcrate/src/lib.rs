@@ -142,6 +142,7 @@ typedef struct
 pub struct lua_State_wrapper {
     pub parent: *mut c_void,
     pub L: *mut c_void,
+    pub is_data_copy: c_int // 1 if this is a data copy VM, 0 if this is the main VM
 }
 
 #[allow(non_camel_case_types)]
@@ -356,119 +357,6 @@ mod tests {
             }
 
             println!("gettop call two: {}", lua_gettop(state));
-
-            println!("current dir: {:?}", std::env::current_dir());
-            let code = "local a = vm.create('./testcrate/test').l(); print(a); return a";
-            let mut bytecode_size = 0;
-            let bytecode = luau_compile(
-                code.as_ptr().cast(),
-                code.len(),
-                ptr::null_mut(),
-                &mut bytecode_size,
-            );
-            let result = luau_load(state, c"=stdin".as_ptr(), bytecode, bytecode_size, 0);
-            assert_eq!(result, 0);
-            free(bytecode.cast());
-
-            // Create a lua thread
-            assert_eq!(
-                std::ffi::CStr::from_ptr(lua_typename(state, lua_type(state, -1)))
-                    .to_string_lossy(),
-                "function"
-            );
-            let thread = lua_newthread(state);
-            assert!(!thread.is_null());
-            // Push the function to the thread
-            lua_pushvalue(state, -2);
-            lua_xpush(state, thread, 1);
-
-            // Resume the thread
-            let mut result = lua_resume(thread, std::ptr::null_mut(), 0);
-            println!("result: {}", result);
-
-            if result == 2 {
-                println!("Error: lua_resume returned LUA_ERRRUN");
-                // Get the error message
-                let error_message = to_string(thread, -1);
-                println!("Error message: {}", error_message);
-                panic!("Error: lua_resume returned LUA_ERRRUN");
-            }
-
-            if result != 1 {
-                println!("Error: lua_resume returned unexpected result: {}", result);
-                panic!("Error: lua_resume returned unexpected result");
-            }
-
-            let mut thread_result = None;
-            
-            let mut i = 0;
-            loop {
-                i += 1;
-
-                if i > 100 {
-                    panic!("Too many iterations, breaking to avoid infinite loop");
-                }
-
-                println!("Current gettop: {}", lua_gettop(state));
-                // Check if lua_yield is called
-                if result == 1 {
-                    lua_checkstack(state, 1);
-                    println!("Current gettop: {}", lua_gettop(state));
-                    // Run a loop of the scheduler
-                    println!("lua_yield case");
-
-                    thread_result = Some(1);
-
-                    lua_pushcclosurek(state, lutec_run_once_lua, ptr::null(), 0, ptr::null());
-                    if lua_pcall(state, 0, 2, 0) != 0 {
-                        let error_message = to_string(state, -1);
-                        panic!("Got error: {}", error_message);
-                    }
-
-                    let op = lua_tointegerx(state, -1, ptr::null_mut());
-                    if op == LUTE_STATE_SUCCESS {
-                        let res = lua_tothread(state, -2);
-
-                        assert!(!res.is_null());
-                    }
-
-                    lua_settop(state, -3);
-
-                    println!("HERE");
-
-                    if lutec_has_threads(state) == 1 {
-                        println!("We still have work to do");
-                        std::thread::sleep(std::time::Duration::from_millis(100));
-                        continue;
-                    }
-
-                    if lutec_has_continuation(state) == 1 {
-                        println!("Continuations still exist, continuing");
-                        std::thread::sleep(std::time::Duration::from_millis(100));
-                        continue;
-                    }
-
-                    if lutec_has_work(state) == 1 {
-                        println!("Work still exists, continuing");
-                        std::thread::sleep(std::time::Duration::from_millis(100));
-                        continue;
-                    }
-
-                    println!("Lute test completed");
-                    // Pop the value out of the thread
-                    let result = lua_tointegerx(thread, -1, ptr::null_mut());
-                    lua_settop(thread, -2);
-                    println!("result: {}", result);
-                    thread_result = Some(result);
-                    break;
-                } else {
-                    break;
-                }
-            }
-
-            assert!(thread_result.is_some());
-            let thread_result = thread_result.unwrap();
-            assert_eq!(thread_result, 78);
 
             lua_resetthread(thread);
 

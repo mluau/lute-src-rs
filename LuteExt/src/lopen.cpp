@@ -17,6 +17,7 @@ typedef struct
 {
     lua_State *parent;
     lua_State *L;
+    int is_data_copy = 0; // 1 if this is a data copy VM, 0 if this is the main VM
 } lua_State_wrapper;
 
 struct lutec_setupState
@@ -135,9 +136,12 @@ lua_State *setupState(lua_State *parent, Runtime &runtime, void (*doBeforeSandbo
     // Make data copy VM
     lua_State_wrapper *lua_state_wrapper = new lua_State_wrapper();
     lua_state_wrapper->parent = parent;
+    lua_state_wrapper->L = nullptr;      // Initialize to nullptr explicitly
+    lua_state_wrapper->is_data_copy = 1; // We are making a data copy VM
 
     lutec_setup->setup_lua_state(lua_state_wrapper);
 
+    // SAFETY: We've verified
     lua_State *DC = std::move(lua_state_wrapper->L);
     if (DC == nullptr)
     {
@@ -154,6 +158,8 @@ lua_State *setupState(lua_State *parent, Runtime &runtime, void (*doBeforeSandbo
     // Create the main VM
     lua_State_wrapper *lua_state_wrapper_main = new lua_State_wrapper();
     lua_state_wrapper_main->parent = parent;
+    lua_state_wrapper_main->L = nullptr;      // Initialize to nullptr explicitly
+    lua_state_wrapper_main->is_data_copy = 0; // This is the main VM
     lutec_setup->setup_lua_state(lua_state_wrapper_main);
     lua_State *L = std::move(lua_state_wrapper_main->L);
     if (L == nullptr)
