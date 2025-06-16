@@ -16,8 +16,9 @@
 typedef struct
 {
     lua_State *parent;
-    lua_State *L;
-    int is_data_copy = 0; // 1 if this is a data copy VM, 0 if this is the main VM
+    lua_State *L = nullptr;         // Initialize to nullptr explicitly
+    int is_data_copy = 0;           // 1 if this is a data copy VM, 0 if this is the main VM
+    void *runtime_to_set = nullptr; // Pointer to the runtime to set, if needed
 } lua_State_wrapper;
 
 struct lutec_setupState
@@ -136,8 +137,9 @@ lua_State *setupState(lua_State *parent, Runtime &runtime, void (*doBeforeSandbo
     // Make data copy VM
     lua_State_wrapper *lua_state_wrapper = new lua_State_wrapper();
     lua_state_wrapper->parent = parent;
-    lua_state_wrapper->L = nullptr;      // Initialize to nullptr explicitly
-    lua_state_wrapper->is_data_copy = 1; // We are making a data copy VM
+    lua_state_wrapper->L = nullptr;              // Initialize to nullptr explicitly
+    lua_state_wrapper->runtime_to_set = nullptr; // No runtime to set for data copy VM
+    lua_state_wrapper->is_data_copy = 1;         // We are making a data copy VM
 
     lutec_setup->setup_lua_state(lua_state_wrapper);
 
@@ -158,8 +160,9 @@ lua_State *setupState(lua_State *parent, Runtime &runtime, void (*doBeforeSandbo
     // Create the main VM
     lua_State_wrapper *lua_state_wrapper_main = new lua_State_wrapper();
     lua_state_wrapper_main->parent = parent;
-    lua_state_wrapper_main->L = nullptr;      // Initialize to nullptr explicitly
-    lua_state_wrapper_main->is_data_copy = 0; // This is the main VM
+    lua_state_wrapper_main->L = nullptr;               // Initialize to nullptr explicitly
+    lua_state_wrapper_main->is_data_copy = 0;          // This is the main VM
+    lua_state_wrapper_main->runtime_to_set = &runtime; // Set the runtime to be used in the main VM
     lutec_setup->setup_lua_state(lua_state_wrapper_main);
     lua_State *L = std::move(lua_state_wrapper_main->L);
     if (L == nullptr)
@@ -176,7 +179,10 @@ lua_State *setupState(lua_State *parent, Runtime &runtime, void (*doBeforeSandbo
 
     runtime.GL = L;
 
-    lua_setthreaddata(L, &runtime);
+    // Ensure setup_lua_state has set the thread data
+    Runtime *existingRuntime = static_cast<Runtime *>(lua_getthreaddata(L));
+    if (!existingRuntime)
+        return nullptr; // Thread data already set, cannot set runtime
 
     return L;
 }

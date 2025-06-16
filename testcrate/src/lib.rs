@@ -143,6 +143,7 @@ pub struct lua_State_wrapper {
     pub parent: *mut c_void,
     pub L: *mut c_void,
     pub is_data_copy: c_int // 1 if this is a data copy VM, 0 if this is the main VM
+    pub runtime_to_set: *mut c_void, // Pointer to the runtime to set with lua_setthreaddata in the wrapper
 }
 
 #[allow(non_camel_case_types)]
