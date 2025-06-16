@@ -359,8 +359,6 @@ mod tests {
 
             println!("gettop call two: {}", lua_gettop(state));
 
-            lua_resetthread(thread);
-
             lutec_destroy_runtime(state);
             lua_close(state);
         }

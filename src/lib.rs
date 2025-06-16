@@ -32,7 +32,8 @@ fn does_lute_exist(cmd: &str) -> bool {
 pub fn build_lute(lcfg: LConfig) {
     println!("cargo:rustc-env=LUAU_VERSION=0.677"); // TODO: Update when needed
 
-    // On non-nightly builds, we need to use the lld linker
+    // On non-nightly builds outside macos, we need to use the lld linker
+    #[cfg(not(target_os = "macos"))]
     match version_meta().unwrap().channel {
         Channel::Nightly | Channel::Dev => {}
         _ => {
@@ -139,6 +140,7 @@ pub fn build_lute(lcfg: LConfig) {
     // Custom is a special library that needs to be built manually and linked in as well
     cc::Build::new()
         .cpp(true)
+	.std("c++17")
         .file("Custom/src/lextra.cpp")
         .file("Custom/src/lflags.cpp")
         .flag("-DLUA_USE_LONGJMP=1")
@@ -168,6 +170,7 @@ pub fn build_lute(lcfg: LConfig) {
 
     build
         .cpp(true)
+	.std("c++17")
         .file("LuteExt/src/lopen.cpp")
         .include("lute/lute/cli/include")
         .include("lute/lute/crypto/include")
