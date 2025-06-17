@@ -259,7 +259,6 @@ pub fn build_lute(lcfg: LConfig) {
         .cxxflag("-DLUA_API=extern \"C\"") // Use C linkage for Lua API
         .cxxflag("-DLUACODE_API=extern \"C\"") // Use C linkage for Lua code API
         .cxxflag("-DLUACODEGEN_API=extern \"C\"") // Use C linkage for Lua codegen API
-        #[cfg(not(target_os = "windows"))]
         .cxxflag(
             "-fexceptions" // Enable C++ exceptions on non-Windows
         )
