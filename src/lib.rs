@@ -158,7 +158,7 @@ pub fn build_lute(lcfg: LConfig) {
     {
         let target = std::env::var("TARGET").unwrap();
         // If target is not android
-        if !target.contains("android") && !target.contains("emscripten") {
+        if !target.contains("emscripten") {
             // Use lld linker for non-android linux targets when not on nightly
             match version_meta().unwrap().channel {
                 Channel::Nightly | Channel::Dev => {}
