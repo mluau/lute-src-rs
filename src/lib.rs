@@ -98,12 +98,12 @@ pub fn build_lute(lcfg: LConfig) {
             let entry = entry.expect("Failed to read entry");
             let src_path = entry.path();
 
-            if src_path.display().to_string().contains("part") && !src_path.display().to_string().contains("part0") {
-                // Skip part files that are not part0
+            if src_path.display().to_string().contains("part") && !src_path.display().to_string().contains("part1") {
+                // Skip part files that are not part1
                 continue;
             }
 
-            if src_path.is_file() && src_path.extension().map_or(false, |ext| ext == "part0") {
+            if src_path.is_file() && src_path.extension().map_or(false, |ext| ext == "part1") {
                 let dst_path = src_path.display().to_string().split(".part").next().unwrap().to_string();
 
                 let mut part_number = 1;
