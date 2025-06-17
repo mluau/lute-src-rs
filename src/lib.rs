@@ -77,7 +77,8 @@ pub fn build_lute(lcfg: LConfig) {
 
         let target = std::env::var("TARGET").unwrap();
 
-        let static_libs_path = format!("prebuilts-git-build/prebuilts/{}/build/staticlibs", target);
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let static_libs_path = format!("{}/prebuilts-git-build/prebuilts/{}/build/staticlibs", manifest_dir, target);
         let slp = std::path::Path::new(&static_libs_path);
         if !slp.exists() {
             panic!("No prebuilt libs found in repo?");
