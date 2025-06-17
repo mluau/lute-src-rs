@@ -155,10 +155,17 @@ pub fn build_lute(lcfg: LConfig) {
 
     // On non-nightly builds outside macos, we need to use the lld linker
     #[cfg(target_os = "linux")]
-    match version_meta().unwrap().channel {
-        Channel::Nightly | Channel::Dev => {}
-        _ => {
-            println!("cargo:rustc-link-arg=-fuse-ld=lld");
+    {
+        let target = std::env::var("TARGET").unwrap();
+        // If target is not android
+        if !target.contains("android") && !target.contains("emscripten") {
+            // Use lld linker for non-android linux targets when not on nightly
+            match version_meta().unwrap().channel {
+                Channel::Nightly | Channel::Dev => {}
+                _ => {
+                    println!("cargo:rustc-link-arg=-fuse-ld=lld");
+                }
+            }
         }
     }
 

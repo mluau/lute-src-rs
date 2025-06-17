@@ -321,9 +321,9 @@ pub fn build_lute_prebuilt(lcfg: LConfig, target: &str, os: &str) {
         .flag("-DLUACODE_API=extern \"C\"")
         .flag("-DLUACODEGEN_API=extern \"C\"")
         .flag("-DLUAI_MAXCSTACK=1000000")
-        .flag("-DLUA_UTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
-        .flag("-DLUA_LUTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
-        .flag("-fexceptions")
+        .flag("-DLUA_UTAG_LIMIT=128") 
+        .flag("-DLUA_LUTAG_LIMIT=128") 
+        .flag_if_supported("-fexceptions")
         .include("lute/extern/luau/VM/include")
         .include("lute/extern/luau/VM/src")
         .include("lute/extern/luau/Common/include")
@@ -363,8 +363,11 @@ pub fn build_lute_prebuilt(lcfg: LConfig, target: &str, os: &str) {
         .flag("-DLUACODE_API=extern \"C\"")
         .flag("-DLUACODEGEN_API=extern \"C\"")
         .flag("-DLUAI_MAXCSTACK=1000000")
-        .flag("-DLUA_UTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
-        .flag("-DLUA_LUTAG_LIMIT=256"); // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
+        .flag("-DLUA_UTAG_LIMIT=128")
+        .flag("-DLUA_LUTAG_LIMIT=128")
+        .flag_if_supported(
+            "-fexceptions" // Enable C++ exceptions on non-Windows
+        ); 
         
     if lcfg.disable_net {
         build.flag("-DLUTE_DISABLE_NET=1");
@@ -375,28 +378,31 @@ pub fn build_lute_prebuilt(lcfg: LConfig, target: &str, os: &str) {
     }
 
     build
-        .flag("-fexceptions")
         .static_crt(true)
         .out_dir(&prebuilts_dir)
         .compile("Luau.LuteExt");
 
     let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        Config::new("lute")
-            .profile("Release") // Debug builds tend to be extremely slow and nearly unusable in practice
-            .define("LUAU_EXTERN_C", "ON") // Provides DLUA_USE_LONGJMP, DLUA_API, LUACODE_API, LUACODEGEN_API
-            .define("LUAU_STATIC_CRT", "ON")
-            .define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreaded$<$<CONFIG:Debug>:Debug>") // Use static CRT for MSVC
-            .define("LUAU_BUILD_STATIC", "ON")
-            .define("LUTE_DISABLE_NET", if lcfg.disable_net { "ON" } else { "OFF" } )
-            .define("LUTE_DISABLE_CRYPTO", if lcfg.disable_crypto { "ON" } else { "OFF" }  )
-            .cxxflag("-DLUAI_MAXCSTACK=1000000")
-            .cxxflag("-DLUA_UTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
-            .cxxflag("-DLUA_LUTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
-            .init_cxx_cfg(config)
-            .no_build_target(true)
-            .target(&target)
-            .static_crt(true)
-            .build();
+    let mut dst = Config::new("lute")
+        .profile("Release") // Debug builds tend to be extremely slow and nearly unusable in practice
+        .define("LUAU_EXTERN_C", "ON") // Provides DLUA_USE_LONGJMP, DLUA_API, LUACODE_API, LUACODEGEN_API
+        .define("LUAU_STATIC_CRT", "ON")
+        .define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreaded$<$<CONFIG:Debug>:Debug>") // Use static CRT for MSVC
+        .define("LUAU_BUILD_STATIC", "ON")
+        .define("LUTE_DISABLE_NET", if lcfg.disable_net { "ON" } else { "OFF" } )
+        .define("LUTE_DISABLE_CRYPTO", if lcfg.disable_crypto { "ON" } else { "OFF" }  )
+        .cxxflag("-DLUAI_MAXCSTACK=1000000")
+        .cxxflag("-DLUA_UTAG_LIMIT=128")
+        .cxxflag("-DLUA_LUTAG_LIMIT=128") 
+        .cxxflag("-DLUA_USE_LONGJMP=1") // Use longjmp for error handling
+        .cxxflag(
+            "-fexceptions" // Enable C++ exceptions on non-Windows
+        )
+        .init_cxx_cfg(config)
+        .no_build_target(true)
+        .static_crt(true)
+        .target(&target)
+        .build();
     }));
 
     match err {
