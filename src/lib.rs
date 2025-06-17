@@ -127,7 +127,10 @@ pub fn build_lute(lcfg: LConfig) {
 
             // Link the static library
             if src_path.is_file() {
+                #[cfg(not(target_os = "windows"))]
                 let lib_name = src_path.file_stem().unwrap().to_str().unwrap().trim_start_matches("lib");
+                #[cfg(target_os = "windows")]
+                let lib_name = src_path.file_stem().unwrap().to_str().unwrap();
                 println!("cargo:rustc-link-lib=static={}", lib_name);
             }
         }
