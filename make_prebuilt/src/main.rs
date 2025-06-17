@@ -419,6 +419,7 @@ pub fn build_lute_prebuilt(lcfg: LConfig, target: &str, os: &str) {
             }
             let file_name = path.file_name().unwrap();
             let dest_path = std::path::Path::new(&staticlibs_dir).join(file_name);
+            println!("Copying {} to {}", path.display(), dest_path.display());
             std::fs::copy(path.clone(), &dest_path).expect("Failed to copy static library");
         });
 }
