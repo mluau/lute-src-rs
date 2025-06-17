@@ -277,6 +277,7 @@ pub fn build_lute(lcfg: LConfig) {
 
     #[cfg(target_os = "windows")]
     {
+        println!("cargo:rustc-link-search=native={}/build/Release", dst.display());
         println!("cargo:rustc-link-search=native={}/build/extern/luau/Release", dst.display());
         println!("cargo:rustc-link-search=native={}/build/extern/libuv/Release", dst.display());
 
@@ -367,10 +368,18 @@ pub fn build_lute(lcfg: LConfig) {
 
     if !lcfg.disable_net || !lcfg.disable_crypto {
         // boringssl
+        #[cfg(not(target_os = "windows"))]
         println!(
             "cargo:rustc-link-search=native={}/build/extern/boringssl",
             dst.display()
         );
+
+        #[cfg(target_os = "windows")]
+        println!(
+            "cargo:rustc-link-search=native={}/build/extern/boringssl/Release",
+            dst.display()
+        );
+
         println!("cargo:rustc-link-lib=static=crypto");
         println!("cargo:rustc-link-lib=static=decrepit");
         println!("cargo:rustc-link-lib=static=pki");
