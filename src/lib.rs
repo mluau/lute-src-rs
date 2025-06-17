@@ -123,6 +123,14 @@ pub fn build_lute(lcfg: LConfig) {
 
                 // Write the combined contents to the destination file
                 std::fs::write(&dst_path, contents).expect("Failed to write combined file");
+
+                #[cfg(not(target_os = "windows"))]
+                let lib_name = src_path.file_stem().unwrap().to_str().unwrap().trim_start_matches("lib").trim_end_matches(".lib");
+                #[cfg(target_os = "windows")]
+                let lib_name = src_path.file_stem().unwrap().to_str().unwrap().trim_end_matches(".lib");
+                
+                println!("cargo:rustc-link-lib=static={}", lib_name);
+                continue;
             }
 
             // Link the static library
@@ -131,6 +139,7 @@ pub fn build_lute(lcfg: LConfig) {
                 let lib_name = src_path.file_stem().unwrap().to_str().unwrap().trim_start_matches("lib");
                 #[cfg(target_os = "windows")]
                 let lib_name = src_path.file_stem().unwrap().to_str().unwrap();
+                
                 println!("cargo:rustc-link-lib=static={}", lib_name);
             }
         }
