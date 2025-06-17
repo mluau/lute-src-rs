@@ -71,20 +71,7 @@ pub fn build_lute(lcfg: LConfig) {
         cc::Build::new()
         .cpp(true)
 	    .std("c++20")
-        .file("Custom/src/lextra.cpp")
-        .file("Custom/src/lflags.cpp")
-        .flag("-DLUA_USE_LONGJMP=1")
-        .flag("-DLUA_API=extern \"C\"")
-        .flag("-DLUACODE_API=extern \"C\"")
-        .flag("-DLUACODEGEN_API=extern \"C\"")
-        .flag("-DLUAI_MAXCSTACK=1000000")
-        .flag("-DLUA_UTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
-        .flag("-DLUA_LUTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
-        .flag("-fexceptions")
-        .include("lute/extern/luau/VM/include")
-        .include("lute/extern/luau/VM/src")
-        .include("lute/extern/luau/Common/include")
-        .include("lute/extern/luau/Compiler/include")
+        .file("Dummy/src/dummy.cpp")
         .static_crt(true)
         .compile("Luau.Dummy");
 
