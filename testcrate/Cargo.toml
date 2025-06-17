@@ -5,3 +5,6 @@ edition = "2021"
 
 [build-dependencies]
 lute-src-rs = { path = ".." }
+
+[features]
+prebuilt = ["lute-src-rs/prebuilt"]

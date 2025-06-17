@@ -10,3 +10,8 @@ members = [ "make_prebuilt","testcrate"]
 cc = "1"
 cmake = "0.1"
 rustc_version = "0.4"
+git2 = { version = "0.20", optional = true }
+
+[features]
+default = []
+prebuilt = ["dep:git2"]

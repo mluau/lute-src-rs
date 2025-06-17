@@ -6,7 +6,9 @@ use std::env::current_dir;
 #[derive(Clone, Copy)]
 pub struct LConfig {
     pub disable_crypto: bool,
-    pub disable_net: bool
+    pub disable_net: bool,
+    #[cfg(feature = "prebuilt")]
+    pub prebuilts: bool
 }
 
 impl Default for LConfig {
@@ -14,6 +16,8 @@ impl Default for LConfig {
         Self {
             disable_crypto: true, // Takes too long to build
             disable_net: true, // Takes too long to build
+            #[cfg(feature = "prebuilt")]
+            prebuilts: true, // If the user has explicitly built with prebuilts, use them
         }
     }
 }
@@ -32,6 +36,107 @@ fn does_lute_exist(cmd: &str) -> bool {
 pub fn build_lute(lcfg: LConfig) {
     println!("cargo:rustc-env=LUAU_VERSION=0.677"); // TODO: Update when needed
 
+    // Case of prebuilts
+    #[cfg(feature = "prebuilt")]
+    if lcfg.prebuilts {
+        let repo_url = if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+            "https://github.com/mluau/lute-prebuilts-windows"
+        } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+            "https://github.com/mluau/lute-prebuilts-linux"
+        } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+            "https://github.com/mluau/lute-prebuilts-linux"
+        } else {
+            panic!("Prebuilt statically linked lute libs are not yet available for this platform!");
+        };  
+
+        std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")).unwrap();
+        
+        if !std::path::Path::new("prebuilts-git-build").exists() {
+            // Clone the repo if it doesn't exist
+            println!("Cloning prebuilt libs repository from {}", repo_url);
+
+            let repo = match git2::Repository::clone(repo_url, "prebuilts-git-build") {
+                Ok(repo) => repo,
+                Err(e) => panic!("failed to clone: {}", e),
+            };
+        } else {
+            // If it exists, we can assume it's already cloned
+            println!("Using existing prebuilt libs repository");
+        }
+
+        // Configure C++ by building a small dummy Luau.Dummy asset 
+        cc::Build::new()
+        .cpp(true)
+	    .std("c++20")
+        .file("Custom/src/lextra.cpp")
+        .file("Custom/src/lflags.cpp")
+        .flag("-DLUA_USE_LONGJMP=1")
+        .flag("-DLUA_API=extern \"C\"")
+        .flag("-DLUACODE_API=extern \"C\"")
+        .flag("-DLUACODEGEN_API=extern \"C\"")
+        .flag("-DLUAI_MAXCSTACK=1000000")
+        .flag("-DLUA_UTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
+        .flag("-DLUA_LUTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
+        .flag("-fexceptions")
+        .include("lute/extern/luau/VM/include")
+        .include("lute/extern/luau/VM/src")
+        .include("lute/extern/luau/Common/include")
+        .include("lute/extern/luau/Compiler/include")
+        .static_crt(true)
+        .compile("Luau.Dummy");
+
+        let target = std::env::var("TARGET").unwrap();
+
+        let static_libs_path = format!("prebuilts-git-build/prebuilts/{}/build/staticlibs", target);
+        let slp = std::path::Path::new(&static_libs_path);
+        if !slp.exists() {
+            panic!("No prebuilt libs found in repo?");
+        }
+
+        println!("cargo:rustc-link-search=native={}", static_libs_path);
+        for entry in std::fs::read_dir(&static_libs_path).expect("Failed to read source directory") {  
+            let entry = entry.expect("Failed to read entry");
+            let src_path = entry.path();
+
+            if src_path.display().to_string().contains("part") && !src_path.display().to_string().contains("part0") {
+                // Skip part files that are not part0
+                continue;
+            }
+
+            if src_path.is_file() && src_path.extension().map_or(false, |ext| ext == "part0") {
+                let dst_path = src_path.display().to_string().split(".part").next().unwrap().to_string();
+
+                let mut part_number = 1;
+                let mut contents = Vec::new();
+                loop {
+                    let part_file = format!("{}.part{}", dst_path, part_number);
+                    if std::path::Path::new(&part_file).exists() {
+                        // Append the part to the destination file
+                        contents.extend(
+                            std::fs::read(&part_file).expect("Failed to read part file")
+                        );
+                        part_number += 1;
+                    } else {
+                        break; // No more parts found
+                    }
+                }
+
+                // Write the combined contents to the destination file
+                std::fs::write(&dst_path, contents).expect("Failed to write combined file");
+            }
+
+            // Link the static library
+            if src_path.is_file() {
+                let lib_name = src_path.file_stem().unwrap().to_str().unwrap().trim_start_matches("lib");
+                println!("cargo:rustc-link-lib=static={}", lib_name);
+            }
+        }
+
+        // Linking
+
+        return;
+    }
+
     // On non-nightly builds outside macos, we need to use the lld linker
     #[cfg(target_os = "linux")]
     match version_meta().unwrap().channel {
@@ -43,32 +148,32 @@ pub fn build_lute(lcfg: LConfig) {
 
     // Switch directory to CARGO_MANIFEST_DIR
     std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")).unwrap();
-        // This is needed to run the luthier.py script
-        println!(
-            "Current directory: {}",
-            std::env::current_dir().unwrap().display()
-        );
+    // This is needed to run the luthier.py script
+    println!(
+        "Current directory: {}",
+        std::env::current_dir().unwrap().display()
+    );
 
-        // Check for lute/.done_luthier file to see if we need to run luthier.luau (which is slow)
-        let lute_done_path = std::path::Path::new("lute/.done_luthier");
-        if !lute_done_path.exists() {
-        // Check that python is installed, error if not. This is needed
-        // for luthier.py to fetch dependencies
-        let lute = if does_lute_exist("lute") {
-                "lute".to_string()
-            } else if does_lute_exist("lute.exe") {
-                "lute.exe".to_string()
-            } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
-                format!("{}/lute-bins/lute-windows-x86_64.exe", current_dir().unwrap().display()) // prebuilt lute binary for Windows x86_64
-            } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-                format!("{}/lute-bins/lute-linux-x86_64", current_dir().unwrap().display()) // prebuilt lute binary for Linux x86_64
-            } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
-                format!("{}/lute-bins/lute-linux-aarch64", current_dir().unwrap().display()) // prebuilt lute binary for Linux aarch64
-            } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-                format!("{}/lute-bins/lute-macos-aarch64", current_dir().unwrap().display()) // prebuilt lute binary for macOS aarch64
-            } else {
-                panic!("Lute binary not found and pre-built binaries are not available for this platform. Please build Lute manually and add it to your path as it is required for bootstrapping itself.");
-            };
+    // Check for lute/.done_luthier file to see if we need to run luthier.luau (which is slow)
+    let lute_done_path = std::path::Path::new("lute/.done_luthier");
+    if !lute_done_path.exists() {
+    // Check that python is installed, error if not. This is needed
+    // for luthier.py to fetch dependencies
+    let lute = if does_lute_exist("lute") {
+            "lute".to_string()
+        } else if does_lute_exist("lute.exe") {
+            "lute.exe".to_string()
+        } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+            format!("{}/lute-bins/lute-windows-x86_64.exe", current_dir().unwrap().display()) // prebuilt lute binary for Windows x86_64
+        } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+            format!("{}/lute-bins/lute-linux-x86_64", current_dir().unwrap().display()) // prebuilt lute binary for Linux x86_64
+        } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+            format!("{}/lute-bins/lute-linux-aarch64", current_dir().unwrap().display()) // prebuilt lute binary for Linux aarch64
+        } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+            format!("{}/lute-bins/lute-macos-aarch64", current_dir().unwrap().display()) // prebuilt lute binary for macOS aarch64
+        } else {
+            panic!("Lute binary not found and pre-built binaries are not available for this platform. Please build Lute manually and add it to your path as it is required for bootstrapping itself.");
+        };
 
         println!("Using lute binary: {}", lute);
 
