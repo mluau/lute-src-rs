@@ -413,7 +413,7 @@ pub fn build_lute_prebuilt(lcfg: LConfig, target: &str, os: &str) {
     files
         .filter_map(Result::ok)
         .for_each(|path| {
-            if path.display().to_string().starts_with(&staticlibs_dir) {
+            if path.display().to_string().starts_with(&staticlibs_dir) || path.display().to_string().contains("staticlibs") {
                 // Skip files that are already in the staticlibs directory
                 return;
             }
