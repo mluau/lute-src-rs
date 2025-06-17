@@ -408,6 +408,8 @@ pub fn build_lute_prebuilt(lcfg: LConfig, target: &str, os: &str) {
     let files = glob::glob(&format!("{}/**/*.{}",  prebuilts_dir, ending))
     .expect("Failed to glob for static libraries");
 
+    std::thread::sleep(std::time::Duration::from_millis(100)); // Sleep to avoid windows issues
+
     files
         .filter_map(Result::ok)
         .for_each(|path| {
