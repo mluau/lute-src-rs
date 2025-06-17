@@ -1,4 +1,5 @@
-use cmake::Config;
+mod cmake;
+use crate::cmake::Config;
 
 use rustc_version::{version_meta, Channel};
 use std::env::current_dir;
@@ -253,8 +254,8 @@ pub fn build_lute(lcfg: LConfig) {
         .define("LUTE_DISABLE_NET", if lcfg.disable_net { "ON" } else { "OFF" } )
         .define("LUTE_DISABLE_CRYPTO", if lcfg.disable_crypto { "ON" } else { "OFF" }  )
         .cxxflag("-DLUAI_MAXCSTACK=1000000")
-        .cxxflag("-DLUA_UTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
-        .cxxflag("-DLUA_LUTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
+        .cxxflag("-DLUA_UTAG_LIMIT=128")
+        .cxxflag("-DLUA_LUTAG_LIMIT=128") 
         .cxxflag("-DLUA_USE_LONGJMP=1") // Use longjmp for error handling
         .cxxflag(
             "-fexceptions" // Enable C++ exceptions on non-Windows
@@ -275,8 +276,8 @@ pub fn build_lute(lcfg: LConfig) {
         .flag("-DLUACODE_API=extern \"C\"")
         .flag("-DLUACODEGEN_API=extern \"C\"")
         .flag("-DLUAI_MAXCSTACK=1000000")
-        .flag("-DLUA_UTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
-        .flag("-DLUA_LUTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
+        .flag("-DLUA_UTAG_LIMIT=128") 
+        .flag("-DLUA_LUTAG_LIMIT=128") 
         .flag_if_supported(
             "-fexceptions" // Enable C++ exceptions on non-Windows
         )
@@ -323,8 +324,8 @@ pub fn build_lute(lcfg: LConfig) {
         .flag("-DLUACODE_API=extern \"C\"")
         .flag("-DLUACODEGEN_API=extern \"C\"")
         .flag("-DLUAI_MAXCSTACK=1000000")
-        .flag("-DLUA_UTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
-        .flag("-DLUA_LUTAG_LIMIT=255")
+        .flag("-DLUA_UTAG_LIMIT=128")
+        .flag("-DLUA_LUTAG_LIMIT=128")
         .flag_if_supported(
             "-fexceptions" // Enable C++ exceptions on non-Windows
         );
