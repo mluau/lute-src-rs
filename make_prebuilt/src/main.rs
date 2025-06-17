@@ -178,9 +178,20 @@ pub fn build_lute_prebuilt(lcfg: LConfig, target: &str, os: &str) {
         std::env::set_var("TARGET", target);
         std::env::set_var("OPT_LEVEL", "3");
         std::env::set_var("OUT_DIR", &prebuilts_dir);
-        std::env::set_var("CARGO_CFG_TARGET_ENV", target.split('-').nth(1).unwrap_or("unknown"));
-        std::env::set_var("CARGO_CFG_TARGET_OS", target.split('-').nth(2).unwrap_or("unknown"));
-        std::env::set_var("CARGO_CFG_TARGET_ARCH", target.split('-').nth(0).unwrap_or("unknown"));
+
+        if os == "windows" {
+            std::env::set_var("CARGO_CFG_TARGET_ENV", "msvc");
+            std::env::set_var("CARGO_CFG_TARGET_OS", "windows");
+            std::env::set_var("CARGO_CFG_TARGET_ARCH", "x86_64");
+        } else if os == "macos" {
+            std::env::set_var("CARGO_CFG_TARGET_ENV", "darwin");
+            std::env::set_var("CARGO_CFG_TARGET_OS", "macos");
+            std::env::set_var("CARGO_CFG_TARGET_ARCH", "aarch64");
+        } else {
+            std::env::set_var("CARGO_CFG_TARGET_ENV", target.split('-').nth(1).unwrap_or("unknown"));
+            std::env::set_var("CARGO_CFG_TARGET_OS", target.split('-').nth(2).unwrap_or("unknown"));
+            std::env::set_var("CARGO_CFG_TARGET_ARCH", target.split('-').nth(0).unwrap_or("unknown"));
+        }
     }
 
     // On non-nightly builds outside macos, we need to use the lld linker
