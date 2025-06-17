@@ -371,7 +371,6 @@ pub fn build_lute_prebuilt(lcfg: LConfig, target: &str, os: &str) {
             .init_cxx_cfg(config)
             .no_build_target(true)
             .target(&target)
-            .generator("Ninja")
             .static_crt(true)
             .build();
     }));
