@@ -255,6 +255,14 @@ pub fn build_lute(lcfg: LConfig) {
         .cxxflag("-DLUAI_MAXCSTACK=1000000")
         .cxxflag("-DLUA_UTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
         .cxxflag("-DLUA_LUTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
+        .cxxflag("-DLUA_USE_LONGJMP=1") // Use longjmp for error handling
+        .cxxflag("-DLUA_API=extern \"C\"") // Use C linkage for Lua API
+        .cxxflag("-DLUACODE_API=extern \"C\"") // Use C linkage for Lua code API
+        .cxxflag("-DLUACODEGEN_API=extern \"C\"") // Use C linkage for Lua codegen API
+        #[cfg(not(target_os = "windows"))]
+        .cxxflag(
+            "-fexceptions" // Enable C++ exceptions on non-Windows
+        )
         .init_cxx_cfg(config)
         .no_build_target(true)
         .static_crt(true)
@@ -271,9 +279,11 @@ pub fn build_lute(lcfg: LConfig) {
         .flag("-DLUACODE_API=extern \"C\"")
         .flag("-DLUACODEGEN_API=extern \"C\"")
         .flag("-DLUAI_MAXCSTACK=1000000")
-        .flag("-DLUA_UTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
-        .flag("-DLUA_LUTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
-        .flag("-fexceptions")
+        .flag("-DLUA_UTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
+        .flag("-DLUA_LUTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
+        .flag_if_supported(
+            "-fexceptions" // Enable C++ exceptions on non-Windows
+        )
         .include("lute/extern/luau/VM/include")
         .include("lute/extern/luau/VM/src")
         .include("lute/extern/luau/Common/include")
@@ -317,8 +327,11 @@ pub fn build_lute(lcfg: LConfig) {
         .flag("-DLUACODE_API=extern \"C\"")
         .flag("-DLUACODEGEN_API=extern \"C\"")
         .flag("-DLUAI_MAXCSTACK=1000000")
-        .flag("-DLUA_UTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
-        .flag("-DLUA_LUTAG_LIMIT=256"); // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
+        .flag("-DLUA_UTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
+        .flag("-DLUA_LUTAG_LIMIT=255")
+        .flag_if_supported(
+            "-fexceptions" // Enable C++ exceptions on non-Windows
+        );
         
     if lcfg.disable_net {
         build.flag("-DLUTE_DISABLE_NET=1");
