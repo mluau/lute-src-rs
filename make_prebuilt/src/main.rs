@@ -2,7 +2,7 @@
 mod cmake; // patched cmake-rs crate to work outside build scripts
 
 use crate::cmake::Config;
-
+use std::io::{Read, Write};
 use rustc_version::{version_meta, Channel};
 use std::env::current_dir;
 
@@ -93,27 +93,29 @@ pub fn upload_to_git(targets: Vec<&str>, os: &str) {
             let src_path = entry.path();
             let dest_path = std::path::Path::new(&prebuilts_dest_dir).join(entry.file_name());
 
-            std::fs::copy(&src_path, &dest_path).expect("Failed to copy file");
+            println!("Copying {} to {}", src_path.display(), dest_path.display());
 
-            // Compress the file if greater than 100MB using gzip
+            // Split the file into 2 parts if it is larger than 100MB
             if src_path.is_file() && src_path.metadata().unwrap().len() > 100  * 1024 * 1024 {
-                let output = std::process::Command::new("gzip")
-                    .arg("-k") // Keep the original file
-                    .arg(&dest_path)
-                    .output()
-                    .expect("Failed to compress file with gzip");
-
-                if !output.status.success() {
-                    panic!(
-                        "Failed to compress file with gzip: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    );
+                println!("Splitting file {} into 2 parts", src_path.display());
+                let file = std::fs::File::open(&src_path).expect("Failed to open file");
+                let mut reader = std::io::BufReader::new(file);
+                let mut buffer = vec![0; 100 * 1024 * 1024]; // 100MB buffer
+                let mut part_number = 1;
+                loop {
+                    let bytes_read = reader.read(&mut buffer).expect("Failed to read file");
+                    if bytes_read == 0 {
+                        break; // End of file
+                    }
+                    let part_file_name = format!("{}.part{}", dest_path.display(), part_number);
+                    let mut part_file = std::fs::File::create(&part_file_name).expect("Failed to create part file");
+                    part_file.write_all(&buffer[..bytes_read]).expect("Failed to write to part file");
+                    println!("Created part file: {}", part_file_name);
+                    part_number += 1;
                 }
-
-                // Remove the original file after compression
-                std::fs::remove_file(&dest_path).expect("Failed to remove original file after compression");
+            } else {
+                std::fs::copy(&src_path, &dest_path).expect("Failed to copy file");
             }
-        }
         }
     }
 
