@@ -59,6 +59,9 @@ pub fn build_lute(lcfg: LConfig) {
                 Ok(repo) => repo,
                 Err(e) => panic!("failed to clone: {}", e),
             };
+
+            // Run if prebuilts-git-build changes
+            println!("cargo:rerun-if-changed=prebuilts-git-build");
         } else {
             // If it exists, we can assume it's already cloned
             println!("Using existing prebuilt libs repository");
@@ -144,7 +147,19 @@ pub fn build_lute(lcfg: LConfig) {
             }
         }
 
-        // Linking
+        // Linking windows system libraries
+        #[cfg(target_os = "windows")]
+        {
+            println!("cargo:rustc-link-lib=User32"); // Solves the __imp_TranslateMessage error
+            println!("cargo:rustc-link-lib=Ws2_32"); // For sockets
+            println!("cargo:rustc-link-lib=Iphlpapi");
+            println!("cargo:rustc-link-lib=Psapi");
+            println!("cargo:rustc-link-lib=Userenv");
+            println!("cargo:rustc-link-lib=Advapi32");
+            println!("cargo:rustc-link-lib=Ole32");
+            println!("cargo:rustc-link-lib=Shell32");
+        }
+
 
         return;
     }
@@ -230,7 +245,8 @@ pub fn build_lute(lcfg: LConfig) {
         .warnings(false)
         .cargo_metadata(true)
         .std("c++20")
-        .cpp(true);
+        .cpp(true)
+        .static_crt(true);
 
     let target = std::env::var("TARGET").unwrap();
 
@@ -539,7 +555,16 @@ pub fn build_lute(lcfg: LConfig) {
     }
     #[cfg(target_os = "windows")]
     {
-        println!("cargo:rustc-link-lib=static=uv");
+        println!("cargo:rustc-link-lib=User32"); // Solves the __imp_TranslateMessage error
+        println!("cargo:rustc-link-lib=Ws2_32"); // For sockets
+        println!("cargo:rustc-link-lib=Iphlpapi");
+        println!("cargo:rustc-link-lib=Psapi");
+        println!("cargo:rustc-link-lib=Userenv");
+        println!("cargo:rustc-link-lib=Advapi32");
+        println!("cargo:rustc-link-lib=Ole32");
+        println!("cargo:rustc-link-lib=Shell32");
+
+        println!("cargo:rustc-link-lib=static=libuv");
     }
 
     // zlib (system)

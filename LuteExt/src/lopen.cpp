@@ -13,13 +13,13 @@
 #include "lute/clicommands.h"
 #include "uv.h"
 
-typedef struct
+struct lua_State_wrapper
 {
     lua_State *parent;
     lua_State *L = nullptr;         // Initialize to nullptr explicitly
     lua_State *DC = nullptr;        // Data copy VM, initialize to nullptr explicitly
     void *runtime_to_set = nullptr; // Pointer to the runtime to set, if needed
-} lua_State_wrapper;
+};
 
 struct lutec_setupState
 {
