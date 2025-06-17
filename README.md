@@ -2,4 +2,8 @@
 
 Wrapper code to build and integrate Lute into Rust.
 
-**Note that either Nightly Rust or a .cargo/config.toml to change the used linker to lld is required to use this**
+## Windows Notes
+
+- MSVC is the only compiler/linker supported.
+- CMake must be installed and available in the PATH.
+- NASM must be installed and available in the PATH for ``@lute/net`` and ``@lute/crypto``.
