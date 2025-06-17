@@ -97,6 +97,8 @@ pub fn upload_to_git(targets: Vec<&str>, os: &str) {
         }
     }
 
+    println!("Uploading prebuilts to {}...", prebuilt_git_dir);
+
     // Add, commit and push the changes to the prebuilts-git repository
     let output = std::process::Command::new("git")
         .arg("-C")
