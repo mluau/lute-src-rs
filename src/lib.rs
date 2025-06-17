@@ -256,9 +256,6 @@ pub fn build_lute(lcfg: LConfig) {
         .cxxflag("-DLUA_UTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
         .cxxflag("-DLUA_LUTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
         .cxxflag("-DLUA_USE_LONGJMP=1") // Use longjmp for error handling
-        .cxxflag("-DLUA_API=extern \"C\"") // Use C linkage for Lua API
-        .cxxflag("-DLUACODE_API=extern \"C\"") // Use C linkage for Lua code API
-        .cxxflag("-DLUACODEGEN_API=extern \"C\"") // Use C linkage for Lua codegen API
         .cxxflag(
             "-fexceptions" // Enable C++ exceptions on non-Windows
         )
