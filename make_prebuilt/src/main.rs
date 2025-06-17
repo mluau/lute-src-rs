@@ -94,6 +94,26 @@ pub fn upload_to_git(targets: Vec<&str>, os: &str) {
             let dest_path = std::path::Path::new(&prebuilts_dest_dir).join(entry.file_name());
 
             std::fs::copy(&src_path, &dest_path).expect("Failed to copy file");
+
+            // Compress the file if greater than 100MB using gzip
+            if src_path.is_file() && src_path.metadata().unwrap().len() > 100  * 1024 * 1024 {
+                let output = std::process::Command::new("gzip")
+                    .arg("-k") // Keep the original file
+                    .arg(&dest_path)
+                    .output()
+                    .expect("Failed to compress file with gzip");
+
+                if !output.status.success() {
+                    panic!(
+                        "Failed to compress file with gzip: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                }
+
+                // Remove the original file after compression
+                std::fs::remove_file(&dest_path).expect("Failed to remove original file after compression");
+            }
+        }
         }
     }
 
