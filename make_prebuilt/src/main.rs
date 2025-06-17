@@ -95,12 +95,12 @@ pub fn upload_to_git(targets: Vec<&str>, os: &str) {
 
             println!("Copying {} to {}", src_path.display(), dest_path.display());
 
-            // Split the file into 2 parts if it is larger than 100MB
+            // Split the file into parts if it is larger than 100MB
             if src_path.is_file() && src_path.metadata().unwrap().len() > 100  * 1024 * 1024 {
-                println!("Splitting file {} into 2 parts", src_path.display());
+                println!("Splitting file {} into  parts", src_path.display());
                 let file = std::fs::File::open(&src_path).expect("Failed to open file");
                 let mut reader = std::io::BufReader::new(file);
-                let mut buffer = vec![0; 100 * 1024 * 1024]; // 100MB buffer
+                let mut buffer = vec![0; 90 * 1024 * 1024]; // 100MB buffer
                 let mut part_number = 1;
                 loop {
                     let bytes_read = reader.read(&mut buffer).expect("Failed to read file");
