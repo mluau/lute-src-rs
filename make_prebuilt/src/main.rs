@@ -1,0 +1,412 @@
+#[allow(dead_code)]
+mod cmake; // patched cmake-rs crate to work outside build scripts
+
+use crate::cmake::Config;
+
+use rustc_version::{version_meta, Channel};
+use std::env::current_dir;
+
+// Install (Linux)
+// - g++-aarch64-linux-gnu
+pub fn main() {
+    // Get first arg if present
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() > 1 && args[1] == "upload" {
+        // Upload prebuilts to git
+        #[cfg(target_os = "linux")]
+        {
+            let targets = vec!["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"];
+            upload_to_git(targets, "linux");
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            let targets = vec!["aarch64-apple-macos"];
+            upload_to_git(targets, "macos");
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            let targets = vec!["x86_64-pc-windows-msvc"];
+            upload_to_git(targets, "windows");
+        }
+
+        return;
+    }
+
+    // On linux, build linux prebuilts for aarch64 and x86_64
+    #[cfg(target_os = "linux")]
+    {
+        for target in vec!["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"] {
+            println!("Target: {}", target);
+            build_lute_prebuilt(LConfig::default(), target, "linux");
+        }
+    }
+
+    // On macos, build macos prebuilts for aarch64
+    #[cfg(target_os = "macos")]
+    {
+        build_lute_prebuilt(LConfig::default(), "aarch64-apple-macos", "macos");
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // On windows, build windows prebuilts for x86_64
+        build_lute_prebuilt(LConfig::default(), "x86_64-pc-windows-msvc", "windows");
+    }
+}
+
+pub fn upload_to_git(targets: Vec<&str>, os: &str) {
+    // Remove the prebuilt-git directory if it exists
+    let prebuilt_git_dir = "prebuilts-git";
+    if std::path::Path::new(&prebuilt_git_dir).exists() {
+        std::fs::remove_dir_all(&prebuilt_git_dir).expect("Failed to remove prebuilts-git directory");
+    }
+
+    // Git clone https://github.com/mluau/lute-prebuilts-{os}.git
+    let git_url = format!("https://github.com/mluau/lute-prebuilts-{}.git", os);
+    let output = std::process::Command::new("git")
+        .arg("clone")
+        .arg(&git_url)
+        .arg(&prebuilt_git_dir)
+        .output()
+        .expect("Failed to clone lute-prebuilts repository");
+
+    if !output.status.success() {
+        panic!(
+            "Failed to clone lute-prebuilts repository with stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    // Copy the prebuilts/{target}/staticlibs directory to prebuilts-git/{target}
+    for target in targets {
+        let prebuilts_src_dir = format!("prebuilts/{}/build/staticlibs", target);
+        let prebuilts_dest_dir = format!("{}/{}", prebuilt_git_dir, prebuilts_src_dir);
+        println!("Copying from {} to {}", prebuilts_src_dir, prebuilts_dest_dir);
+        // Create the destination directory if it doesn't exist
+        std::fs::create_dir_all(&prebuilts_dest_dir).expect("Failed to create destination directory");
+
+        // Copy the contents of the source directory to the destination directory
+        for entry in std::fs::read_dir(&prebuilts_src_dir).expect("Failed to read source directory") {
+            let entry = entry.expect("Failed to read entry");
+            let src_path = entry.path();
+            let dest_path = std::path::Path::new(&prebuilts_dest_dir).join(entry.file_name());
+
+            std::fs::copy(&src_path, &dest_path).expect("Failed to copy file");
+        }
+    }
+
+    // Add, commit and push the changes to the prebuilts-git repository
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&prebuilt_git_dir)
+        .arg("add")
+        .arg(".")
+        .output()
+        .expect("Failed to add changes to git");
+
+    if !output.status.success() {
+        panic!(
+            "Failed to add changes to git with stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&prebuilt_git_dir)
+        .arg("commit")
+        .arg("-m")
+        .arg("Update prebuilts")
+        .output()
+        .expect("Failed to commit changes to git");
+
+    if !output.status.success() {
+        panic!(
+            "Failed to commit changes to git with stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&prebuilt_git_dir)
+        .arg("push")
+        .arg("origin")
+        .arg("main") // Assuming the main branch is called "main"
+        .output()
+        .expect("Failed to push changes to git");
+}
+
+#[derive(Clone, Copy)]
+pub struct LConfig {
+    pub disable_crypto: bool,
+    pub disable_net: bool,
+}
+
+impl Default for LConfig {
+    fn default() -> Self {
+        Self {
+            disable_crypto: true, // Takes too long to build
+            disable_net: true, // Takes too long to build
+        }
+    }
+}
+
+fn does_lute_exist(cmd: &str) -> bool {
+    let Ok(cmd) = std::process::Command::new(cmd)
+    .arg("run")
+    .arg("test.luau")
+    .status() else {
+        return false; // Command not found
+    };
+
+    cmd.success() // If the command exists, it should return success
+}
+
+pub fn build_lute_prebuilt(lcfg: LConfig, target: &str, os: &str) {
+    let host = env!("HOST_VAR");
+    println!("Host: {}", host);
+
+    // Make prebuilts/{target} directory if it doesn't exist
+    let prebuilts_dir = format!("prebuilts/{}/build", target);
+    std::fs::create_dir_all(&prebuilts_dir).expect("Failed to create prebuilts directory");
+
+    unsafe {
+        std::env::set_var("HOST", host);
+        std::env::set_var("TARGET", target);
+        std::env::set_var("OPT_LEVEL", "3");
+        std::env::set_var("OUT_DIR", &prebuilts_dir);
+        std::env::set_var("CARGO_CFG_TARGET_ENV", target.split('-').nth(1).unwrap_or("unknown"));
+        std::env::set_var("CARGO_CFG_TARGET_OS", target.split('-').nth(2).unwrap_or("unknown"));
+        std::env::set_var("CARGO_CFG_TARGET_ARCH", target.split('-').nth(0).unwrap_or("unknown"));
+    }
+
+    // On non-nightly builds outside macos, we need to use the lld linker
+    #[cfg(target_os = "linux")]
+    match version_meta().unwrap().channel {
+        Channel::Nightly | Channel::Dev => {}
+        _ => {
+            println!("cargo:rustc-link-arg=-fuse-ld=lld");
+        }
+    }
+
+    // Switch directory to CARGO_MANIFEST_DIR
+    // This is needed to run the luthier.py script
+    println!(
+        "Current directory: {}",
+        std::env::current_dir().unwrap().display()
+    );
+
+    // Check for lute/.done_luthier file to see if we need to run luthier.luau (which is slow)
+    let lute_done_path = std::path::Path::new("lute/.done_luthier");
+    if !lute_done_path.exists() {
+    // Check that python is installed, error if not. This is needed
+    // for luthier.py to fetch dependencies
+    let lute = if does_lute_exist("lute") {
+            "lute".to_string()
+        } else if does_lute_exist("lute.exe") {
+            "lute.exe".to_string()
+        } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+            format!("{}/lute-bins/lute-windows-x86_64.exe", current_dir().unwrap().display()) // prebuilt lute binary for Windows x86_64
+        } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+            format!("{}/lute-bins/lute-linux-x86_64", current_dir().unwrap().display()) // prebuilt lute binary for Linux x86_64
+        } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+            format!("{}/lute-bins/lute-linux-aarch64", current_dir().unwrap().display()) // prebuilt lute binary for Linux aarch64
+        } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+            format!("{}/lute-bins/lute-macos-aarch64", current_dir().unwrap().display()) // prebuilt lute binary for macOS aarch64
+        } else {
+            panic!("Lute binary not found and pre-built binaries are not available for this platform. Please build Lute manually and add it to your path as it is required for bootstrapping itself.");
+        };
+
+        println!("Using lute binary: {}", lute);
+
+        // Use tools/luthier.py in the lute folder to fetch dependencies
+        let output = std::process::Command::new(&lute)
+            .current_dir("lute")
+            .arg("tools/luthier.luau")
+            .arg("fetch")
+            .arg("lute")
+            .output()
+            .expect("Failed to run tools/luthier.py fetch lute");
+
+        if !output.status.success() {
+            panic!(
+                "Failed to run tools/luthier.py fetch lute with stderr: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        let output = std::process::Command::new(lute)
+            .current_dir("lute")
+            .arg("tools/luthier.luau")
+            .arg("generate")
+            .arg("lute")
+            .output()
+            .expect("Failed to run tools/luthier.py fetch lute");
+
+        if !output.status.success() {
+            panic!(
+                "Failed to run tools/luthier.py generate lute with stderr: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        // Create the .done_luthier file to indicate that luthier.py has been run
+        std::fs::File::create(lute_done_path).expect("Failed to create .done_luthier file");
+    }
+
+    // Configure C++
+    let mut config = cc::Build::new();
+    config
+        .warnings(false)
+        .cargo_metadata(true)
+        .std("c++20")
+        .target(&target)
+        .cpp(true);
+
+    if target.ends_with("emscripten") {
+        // Enable c++ exceptions for emscripten (it's disabled by default)
+        // Later we should switch to wasm exceptions
+        config.flag_if_supported("-fexceptions");
+    }
+
+    // Custom is a special library that needs to be built manually and linked in as well
+    println!("Building Luau.Custom for target: {}", target);
+    cc::Build::new()
+        .cpp(true)
+        .host(&host)
+        .target(&target)
+	    .std("c++20")
+        .file("Custom/src/lextra.cpp")
+        .file("Custom/src/lflags.cpp")
+        .flag("-DLUA_USE_LONGJMP=1")
+        .flag("-DLUA_API=extern \"C\"")
+        .flag("-DLUACODE_API=extern \"C\"")
+        .flag("-DLUACODEGEN_API=extern \"C\"")
+        .flag("-DLUAI_MAXCSTACK=1000000")
+        .flag("-DLUA_UTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
+        .flag("-DLUA_LUTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
+        .flag("-fexceptions")
+        .include("lute/extern/luau/VM/include")
+        .include("lute/extern/luau/VM/src")
+        .include("lute/extern/luau/Common/include")
+        .include("lute/extern/luau/Compiler/include")
+        .static_crt(true)
+        .out_dir(&prebuilts_dir)
+        .compile("Luau.Custom");
+
+    // Also build LuteExt
+    println!("Building Luau.LuteExt for target: {}", target);
+    let mut build = cc::Build::new();
+
+    build
+        .host(&host)
+        .target(&target)
+        .cpp(true)
+	    .std("c++20")
+        .file("LuteExt/src/lopen.cpp")
+        .include("lute/lute/cli/include")
+        .include("lute/lute/crypto/include")
+        .include("lute/lute/fs/include")
+        .include("lute/lute/luau/include")
+        .include("lute/lute/net/include")
+        .include("lute/lute/process/include")
+        .include("lute/lute/system/include")
+        .include("lute/lute/vm/include")
+        .include("lute/lute/task/include")
+        .include("lute/lute/time/include")
+        .include("lute/lute/runtime/include")
+        .include("lute/extern/luau/VM/include")
+        .include("lute/extern/luau/VM/src")
+        .include("lute/extern/luau/Common/include")
+        .include("lute/extern/luau/Compiler/include")
+        .include("lute/extern/libuv/include")
+        .flag("-DLUA_USE_LONGJMP=1")
+        .flag("-DLUA_API=extern \"C\"")
+        .flag("-DLUACODE_API=extern \"C\"")
+        .flag("-DLUACODEGEN_API=extern \"C\"")
+        .flag("-DLUAI_MAXCSTACK=1000000")
+        .flag("-DLUA_UTAG_LIMIT=256") // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
+        .flag("-DLUA_LUTAG_LIMIT=256"); // 128 is default, but we want 256 to give 128 for mlua and 128 to lute
+        
+    if lcfg.disable_net {
+        build.flag("-DLUTE_DISABLE_NET=1");
+    }
+
+    if lcfg.disable_crypto {
+        build.flag("-DLUTE_DISABLE_CRYPTO=1");
+    }
+
+    build
+        .flag("-fexceptions")
+        .static_crt(true)
+        .out_dir(&prebuilts_dir)
+        .compile("Luau.LuteExt");
+
+    let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        Config::new("lute")
+            .profile("Release") // Debug builds tend to be extremely slow and nearly unusable in practice
+            .define("LUAU_EXTERN_C", "ON") // Provides DLUA_USE_LONGJMP, DLUA_API, LUACODE_API, LUACODEGEN_API
+            .define("LUAU_STATIC_CRT", "ON")
+            .define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreaded$<$<CONFIG:Debug>:Debug>") // Use static CRT for MSVC
+            .define("LUAU_BUILD_STATIC", "ON")
+            .define("LUTE_DISABLE_NET", if lcfg.disable_net { "ON" } else { "OFF" } )
+            .define("LUTE_DISABLE_CRYPTO", if lcfg.disable_crypto { "ON" } else { "OFF" }  )
+            .cxxflag("-DLUAI_MAXCSTACK=1000000")
+            .cxxflag("-DLUA_UTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
+            .cxxflag("-DLUA_LUTAG_LIMIT=255") // 128 is default, but we want 255 to give 128 for mlua and 128 to lute
+            .init_cxx_cfg(config)
+            .no_build_target(true)
+            .target(&target)
+            .generator("Ninja")
+            .static_crt(true)
+            .build();
+    }));
+
+    match err {
+        Ok(_) => {},
+        Err(e) => {
+            // Most cases will hit this, in this case, check that we've finished configuring
+            if let Some(downcast) = e.downcast_ref::<&str>() {
+                println!("{:?}", downcast);
+            } else if let Some(downcast) = e.downcast_ref::<String>() {
+                println!("{:?}", downcast);
+            } {
+                panic!("Lute prebuilt build failed");
+            }
+        }
+    }
+
+    // Now copy the final output files to the prebuilts directory/{target}/staticlibs
+    //
+    // On linux, these will be *.a files
+    // On macos, these will be *.a files
+    // On windows, these will be *.lib files
+    let staticlibs_dir = format!("{}/staticlibs", prebuilts_dir);
+    std::fs::create_dir_all(&staticlibs_dir).expect("Failed to create staticlibs directory");
+
+    // Now glob
+    let ending = if os == "windows" {
+        "lib"
+    } else {
+        "a"
+    };
+
+    // Copy all static libraries from the build directory to the staticlibs directory
+    let files = glob::glob(&format!("{}/**/*.{}",  prebuilts_dir, ending))
+    .expect("Failed to glob for static libraries");
+
+    files
+        .filter_map(Result::ok)
+        .for_each(|path| {
+            if path.display().to_string().starts_with(&staticlibs_dir) {
+                // Skip files that are already in the staticlibs directory
+                return;
+            }
+            let file_name = path.file_name().unwrap();
+            let dest_path = std::path::Path::new(&staticlibs_dir).join(file_name);
+            std::fs::copy(path.clone(), &dest_path).expect("Failed to copy static library");
+        });
+}

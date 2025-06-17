@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["testcrate"]
+members = [ "make_prebuilt","testcrate"]
 
 [dependencies]
 cc = "1"
