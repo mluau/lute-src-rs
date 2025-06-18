@@ -1,10 +1,6 @@
-#[allow(dead_code)]
-mod cmake; // patched cmake-rs crate to work outside build scripts
-
-use crate::cmake::Config;
-use std::io::{Read, Write};
-use rustc_version::{version_meta, Channel};
+use lute_src_rs_common::{cmake, cmake::Config, LConfig};
 use std::env::current_dir;
+use std::io::{Read, Write};
 
 // Install (Linux)
 // - g++-aarch64-linux-gnu
@@ -163,21 +159,6 @@ pub fn upload_to_git(targets: Vec<&str>, os: &str) {
         .expect("Failed to push changes to git");
 }
 
-#[derive(Clone, Copy)]
-pub struct LConfig {
-    pub disable_crypto: bool,
-    pub disable_net: bool,
-}
-
-impl Default for LConfig {
-    fn default() -> Self {
-        Self {
-            disable_crypto: true, // Takes too long to build
-            disable_net: true, // Takes too long to build
-        }
-    }
-}
-
 fn does_lute_exist(cmd: &str) -> bool {
     let Ok(cmd) = std::process::Command::new(cmd)
     .arg("run")
@@ -215,15 +196,6 @@ pub fn build_lute_prebuilt(lcfg: LConfig, target: &str, os: &str) {
             std::env::set_var("CARGO_CFG_TARGET_ENV", target.split('-').nth(1).unwrap_or("unknown"));
             std::env::set_var("CARGO_CFG_TARGET_OS", target.split('-').nth(2).unwrap_or("unknown"));
             std::env::set_var("CARGO_CFG_TARGET_ARCH", target.split('-').nth(0).unwrap_or("unknown"));
-        }
-    }
-
-    // On non-nightly builds outside macos, we need to use the lld linker
-    #[cfg(target_os = "linux")]
-    match version_meta().unwrap().channel {
-        Channel::Nightly | Channel::Dev => {}
-        _ => {
-            println!("cargo:rustc-link-arg=-fuse-ld=lld");
         }
     }
 

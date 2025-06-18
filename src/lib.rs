@@ -1,27 +1,9 @@
-mod cmake;
-use crate::cmake::Config;
-
-use rustc_version::{version_meta, Channel};
+use lute_src_rs_common::{
+    cmake::Config,
+    finalize::finalize_build
+};
+pub use lute_src_rs_common::LConfig;
 use std::env::current_dir;
-
-#[derive(Clone, Copy)]
-pub struct LConfig {
-    pub disable_crypto: bool,
-    pub disable_net: bool,
-    #[cfg(feature = "prebuilt")]
-    pub prebuilts: bool
-}
-
-impl Default for LConfig {
-    fn default() -> Self {
-        Self {
-            disable_crypto: true, // Takes too long to build
-            disable_net: true, // Takes too long to build
-            #[cfg(feature = "prebuilt")]
-            prebuilts: true, // If the user has explicitly built with prebuilts, use them
-        }
-    }
-}
 
 fn does_lute_exist(cmd: &str) -> bool {
     let Ok(cmd) = std::process::Command::new(cmd)
@@ -39,7 +21,7 @@ pub fn build_lute(lcfg: LConfig) {
 
     // Case of prebuilts
     #[cfg(feature = "prebuilt")]
-    if lcfg.prebuilts {
+    {
         let repo_url = if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
             "https://github.com/mluau/lute-prebuilts-windows"
         } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
@@ -50,7 +32,8 @@ pub fn build_lute(lcfg: LConfig) {
             panic!("Prebuilt statically linked lute libs are not yet available for this platform!");
         };  
 
-        std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")).unwrap();
+        let current_dir = env!("CARGO_MANIFEST_DIR");
+        std::env::set_current_dir(current_dir).unwrap();
         
         if !std::path::Path::new("prebuilts-git-build").exists() {
             // Clone the repo if it doesn't exist
@@ -68,18 +51,10 @@ pub fn build_lute(lcfg: LConfig) {
             println!("Using existing prebuilt libs repository");
         }
 
-        // Configure C++ by building a small dummy Luau.Dummy asset 
-        cc::Build::new()
-        .cpp(true)
-	    .std("c++20")
-        .file("Dummy/src/dummy.cpp")
-        .static_crt(true)
-        .compile("Luau.Dummy");
-
         let target = std::env::var("TARGET").unwrap();
 
-        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        let static_libs_path = format!("{}/prebuilts-git-build/prebuilts/{}/build/staticlibs", manifest_dir, target);
+        let static_libs_path = format!("{}/prebuilts-git-build/prebuilts/{}/build/staticlibs", current_dir, target);
+        println!("Static libs path: {}", static_libs_path);
         let slp = std::path::Path::new(&static_libs_path);
         if !slp.exists() {
             panic!("No prebuilt libs found in repo?");
@@ -115,41 +90,11 @@ pub fn build_lute(lcfg: LConfig) {
 
                 // Write the combined contents to the destination file
                 std::fs::write(&dst_path, contents).expect("Failed to write combined file");
-
-                #[cfg(not(target_os = "windows"))]
-                let lib_name = src_path.file_stem().unwrap().to_str().unwrap().trim_start_matches("lib").trim_end_matches(".lib");
-                #[cfg(target_os = "windows")]
-                let lib_name = src_path.file_stem().unwrap().to_str().unwrap().trim_end_matches(".lib");
-                
-                println!("cargo:rustc-link-lib=static={}", lib_name);
                 continue;
             }
-
-            // Link the static library
-            if src_path.is_file() {
-                #[cfg(not(target_os = "windows"))]
-                let lib_name = src_path.file_stem().unwrap().to_str().unwrap().trim_start_matches("lib");
-                #[cfg(target_os = "windows")]
-                let lib_name = src_path.file_stem().unwrap().to_str().unwrap();
-                
-                println!("cargo:rustc-link-lib=static={}", lib_name);
-            }
         }
 
-        // Linking windows system libraries
-        #[cfg(target_os = "windows")]
-        {
-            println!("cargo:rustc-link-lib=User32"); // Solves the __imp_TranslateMessage error
-            println!("cargo:rustc-link-lib=Ws2_32"); // For sockets
-            println!("cargo:rustc-link-lib=Iphlpapi");
-            println!("cargo:rustc-link-lib=Psapi");
-            println!("cargo:rustc-link-lib=Userenv");
-            println!("cargo:rustc-link-lib=Advapi32");
-            println!("cargo:rustc-link-lib=Ole32");
-            println!("cargo:rustc-link-lib=Shell32");
-        }
-
-
+        finalize_build(lcfg, true);
         return;
     }
 
@@ -281,18 +226,11 @@ pub fn build_lute(lcfg: LConfig) {
 
     // Also build LuteExt
 
-    /*
-    target_compile_definitions(Luau.VM PUBLIC LUA_USE_LONGJMP=1)
-    target_compile_definitions(Luau.VM PUBLIC LUA_API=extern\"C\")
-    target_compile_definitions(Luau.Compiler PUBLIC LUACODE_API=extern\"C\")
-    target_compile_definitions(Luau.CodeGen PUBLIC LUACODEGEN_API=extern\"C\")
-    */
-
     let mut build = cc::Build::new();
 
     build
         .cpp(true)
-	.std("c++20")
+	    .std("c++20")
         .file("LuteExt/src/lopen.cpp")
         .include("lute/lute/cli/include")
         .include("lute/lute/crypto/include")
@@ -457,36 +395,6 @@ pub fn build_lute(lcfg: LConfig) {
         );
     }
 
-    println!("cargo:rustc-link-lib=static=Lute.Luau");
-    println!("cargo:rustc-link-lib=static=Luau.Compiler");
-    println!("cargo:rustc-link-lib=static=Luau.Analysis");
-    println!("cargo:rustc-link-lib=static=Luau.Ast");
-    println!("cargo:rustc-link-lib=static=Luau.CodeGen");
-    println!("cargo:rustc-link-lib=static=Luau.Config");
-    println!("cargo:rustc-link-lib=static=Luau.EqSat");
-    println!("cargo:rustc-link-lib=static=Luau.VM");
-    if !lcfg.disable_crypto {
-        println!("cargo:rustc-link-lib=static=Lute.Crypto");
-    }
-    println!("cargo:rustc-link-lib=static=Lute.Fs");
-    if !lcfg.disable_net {
-        println!("cargo:rustc-link-lib=static=Lute.Net");
-    }
-    println!("cargo:rustc-link-lib=static=Lute.Process");
-    println!("cargo:rustc-link-lib=static=Lute.System");
-    println!("cargo:rustc-link-lib=static=Lute.Task");
-    println!("cargo:rustc-link-lib=static=Lute.Time");
-    println!("cargo:rustc-link-lib=static=Lute.VM");
-    println!("cargo:rustc-link-lib=static=Lute.Require");
-    println!("cargo:rustc-link-lib=static=Lute.Std");
-    println!("cargo:rustc-link-lib=static=Lute.Runtime");
-    println!("cargo:rustc-link-lib=static=Luau.Require");
-    println!("cargo:rustc-link-lib=static=Luau.RequireNavigator"); 
-    println!("cargo:rustc-link-lib=static=Luau.CLI.lib");
-    if !lcfg.disable_net {
-        println!("cargo:rustc-link-lib=static=uSockets");
-    }
-
     if !lcfg.disable_net || !lcfg.disable_crypto {
         // boringssl
         #[cfg(not(target_os = "windows"))]
@@ -500,16 +408,6 @@ pub fn build_lute(lcfg: LConfig) {
             "cargo:rustc-link-search=native={}/build/extern/boringssl/Release",
             dst.display()
         );
-
-        println!("cargo:rustc-link-lib=static=crypto");
-        println!("cargo:rustc-link-lib=static=decrepit");
-        println!("cargo:rustc-link-lib=static=pki");
-        println!("cargo:rustc-link-lib=static=ssl");
-    }
-
-    if !lcfg.disable_crypto {
-        // libsodium
-        println!("cargo:rustc-link-lib=static=sodium");
     }
 
     if !lcfg.disable_net {
@@ -519,19 +417,7 @@ pub fn build_lute(lcfg: LConfig) {
             dst.display()
         );
     }
-
     
-    if !lcfg.disable_net {
-        // Curl
-        let binding = Config::new("lute");
-        let profile = binding.get_profile();
-        if profile == "Debug" {
-            println!("cargo:rustc-link-lib=static=curl-d");
-        } else {
-            println!("cargo:rustc-link-lib=static=curl");
-        }
-    }
-
     // libuv
     #[cfg(not(target_os = "windows"))]
     {
@@ -539,20 +425,6 @@ pub fn build_lute(lcfg: LConfig) {
             "cargo:rustc-link-search=native={}/build/extern/libuv",
             dst.display()
         );
-        println!("cargo:rustc-link-lib=static=uv");
-    }
-    #[cfg(target_os = "windows")]
-    {
-        println!("cargo:rustc-link-lib=User32"); // Solves the __imp_TranslateMessage error
-        println!("cargo:rustc-link-lib=Ws2_32"); // For sockets
-        println!("cargo:rustc-link-lib=Iphlpapi");
-        println!("cargo:rustc-link-lib=Psapi");
-        println!("cargo:rustc-link-lib=Userenv");
-        println!("cargo:rustc-link-lib=Advapi32");
-        println!("cargo:rustc-link-lib=Ole32");
-        println!("cargo:rustc-link-lib=Shell32");
-
-        println!("cargo:rustc-link-lib=static=libuv");
     }
 
     // zlib (system)
@@ -561,5 +433,7 @@ pub fn build_lute(lcfg: LConfig) {
             "cargo:rustc-link-search=native={}/build/extern/zlib",
             dst.display()
         );
-        println!("cargo:rustc-link-lib=static=z"); }
+    }
+
+    finalize_build(lcfg, false);
 }

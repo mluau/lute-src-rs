@@ -8,7 +8,7 @@ members = [ "make_prebuilt","testcrate"]
 
 [dependencies]
 cc = "1"
-rustc_version = "0.4"
+lute-src-rs-common = { git = "https://github.com/mluau/lute-src-rs-common" }
 git2 = { version = "0.20", optional = true }
 
 [features]

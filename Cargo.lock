@@ -259,7 +259,15 @@ version = "0.1.0"
 dependencies = [
  "cc",
  "git2",
- "rustc_version",
+ "lute-src-rs-common",
+]
+
+[[package]]
+name = "lute-src-rs-common"
+version = "0.1.0"
+source = "git+https://github.com/mluau/lute-src-rs-common#64c01f315647b6585a6b2f34dc8d41c8e08514c2"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
@@ -268,7 +276,7 @@ version = "0.1.0"
 dependencies = [
  "cc",
  "glob",
- "rustc_version",
+ "lute-src-rs-common",
 ]
 
 [[package]]
@@ -333,21 +341,6 @@ name = "r-efi"
 version = "5.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f"
-
-[[package]]
-name = "rustc_version"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
-dependencies = [
- "semver",
-]
-
-[[package]]
-name = "semver"
-version = "1.0.26"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56e6fa9c48d24d85fb3de5ad847117517440f6beceb7798af16b4a87d616b8d0"
 
 [[package]]
 name = "serde"
