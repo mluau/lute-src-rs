@@ -5,6 +5,7 @@ edition = "2021"
 
 [build-dependencies]
 lute-src-rs = { path = ".." }
+lute-prebuilts-chooser = { git = "https://github.com/mluau/lute-prebuilts-chooser", optional = true }
 
 [features]
-prebuilt = ["lute-src-rs/prebuilt"]
+prebuilt = ["dep:lute-prebuilts-chooser"]

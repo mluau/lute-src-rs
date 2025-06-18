@@ -254,6 +254,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 
 [[package]]
+name = "lute-prebuilts-chooser"
+version = "0.1.0"
+source = "git+https://github.com/mluau/lute-prebuilts-chooser#98655d66bd042def20e4906fec5317950a689340"
+dependencies = [
+ "lute-prebuilts-linux",
+]
+
+[[package]]
+name = "lute-prebuilts-linux"
+version = "0.1.0"
+source = "git+https://github.com/mluau/lute-prebuilts-linux#bc16461661f6ec36c4be6238b4f8d7d90667305a"
+dependencies = [
+ "lute-src-rs-common",
+]
+
+[[package]]
 name = "lute-src-rs"
 version = "0.1.0"
 dependencies = [
@@ -265,7 +281,7 @@ dependencies = [
 [[package]]
 name = "lute-src-rs-common"
 version = "0.1.0"
-source = "git+https://github.com/mluau/lute-src-rs-common#c79682019a21486d73890c6e3f2afa583e32d3f2"
+source = "git+https://github.com/mluau/lute-src-rs-common#921fb316c39f4fe79f7b731657bf038e3e255999"
 dependencies = [
  "cc",
 ]
@@ -406,6 +422,7 @@ dependencies = [
 name = "testcrate"
 version = "0.1.0"
 dependencies = [
+ "lute-prebuilts-chooser",
  "lute-src-rs",
 ]
 
