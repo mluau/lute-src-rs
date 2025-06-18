@@ -153,22 +153,6 @@ pub fn build_lute(lcfg: LConfig) {
         return;
     }
 
-    // On non-nightly builds outside macos, we need to use the lld linker
-    #[cfg(target_os = "linux")]
-    {
-        let target = std::env::var("TARGET").unwrap();
-        // If target is not android
-        if !target.contains("emscripten") {
-            // Use lld linker for non-android linux targets when not on nightly
-            match version_meta().unwrap().channel {
-                Channel::Nightly | Channel::Dev => {}
-                _ => {
-                    println!("cargo:rustc-link-arg=-fuse-ld=lld");
-                }
-            }
-        }
-    }
-
     // Switch directory to CARGO_MANIFEST_DIR
     std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")).unwrap();
     // This is needed to run the luthier.py script
@@ -308,7 +292,7 @@ pub fn build_lute(lcfg: LConfig) {
 
     build
         .cpp(true)
-	    .std("c++20")
+	.std("c++20")
         .file("LuteExt/src/lopen.cpp")
         .include("lute/lute/cli/include")
         .include("lute/lute/crypto/include")
@@ -473,33 +457,32 @@ pub fn build_lute(lcfg: LConfig) {
         );
     }
 
-    println!("cargo:rustc-link-lib=static=Luau.Ast");
+    println!("cargo:rustc-link-lib=static=Lute.Luau");
+    println!("cargo:rustc-link-lib=static=Luau.Compiler");
     println!("cargo:rustc-link-lib=static=Luau.Analysis");
+    println!("cargo:rustc-link-lib=static=Luau.Ast");
     println!("cargo:rustc-link-lib=static=Luau.CodeGen");
     println!("cargo:rustc-link-lib=static=Luau.Config");
-    println!("cargo:rustc-link-lib=static=Luau.Compiler");
-    println!("cargo:rustc-link-lib=static=Luau.CLI.lib");
     println!("cargo:rustc-link-lib=static=Luau.EqSat");
-    println!("cargo:rustc-link-lib=static=Luau.Require");
-    println!("cargo:rustc-link-lib=static=Luau.RequireNavigator");
     println!("cargo:rustc-link-lib=static=Luau.VM");
     if !lcfg.disable_crypto {
         println!("cargo:rustc-link-lib=static=Lute.Crypto");
     }
     println!("cargo:rustc-link-lib=static=Lute.Fs");
-    println!("cargo:rustc-link-lib=static=Lute.Luau");
     if !lcfg.disable_net {
         println!("cargo:rustc-link-lib=static=Lute.Net");
     }
     println!("cargo:rustc-link-lib=static=Lute.Process");
-    println!("cargo:rustc-link-lib=static=Lute.Runtime");
-    println!("cargo:rustc-link-lib=static=Lute.Require");
-    println!("cargo:rustc-link-lib=static=Lute.Std");
     println!("cargo:rustc-link-lib=static=Lute.System");
     println!("cargo:rustc-link-lib=static=Lute.Task");
     println!("cargo:rustc-link-lib=static=Lute.Time");
     println!("cargo:rustc-link-lib=static=Lute.VM");
-    
+    println!("cargo:rustc-link-lib=static=Lute.Require");
+    println!("cargo:rustc-link-lib=static=Lute.Std");
+    println!("cargo:rustc-link-lib=static=Lute.Runtime");
+    println!("cargo:rustc-link-lib=static=Luau.Require");
+    println!("cargo:rustc-link-lib=static=Luau.RequireNavigator"); 
+    println!("cargo:rustc-link-lib=static=Luau.CLI.lib");
     if !lcfg.disable_net {
         println!("cargo:rustc-link-lib=static=uSockets");
     }
@@ -578,6 +561,5 @@ pub fn build_lute(lcfg: LConfig) {
             "cargo:rustc-link-search=native={}/build/extern/zlib",
             dst.display()
         );
-        println!("cargo:rustc-link-lib=static=z");
-    }
+        println!("cargo:rustc-link-lib=static=z"); }
 }
