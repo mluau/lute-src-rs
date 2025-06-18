@@ -1,4 +1,4 @@
-use lute_src_rs_common::{cmake, cmake::Config, LConfig};
+use lute_src_rs_common::{cmake, cmake::Config, LConfig, commonflags::{build_cc_lute_lib, setup_lute_cmake}};
 use std::env::current_dir;
 use std::io::{Read, Write};
 
@@ -281,115 +281,23 @@ pub fn build_lute_prebuilt(lcfg: LConfig, target: &str, os: &str) {
 
     // Custom is a special library that needs to be built manually and linked in as well
     println!("Building Luau.Custom for target: {}", target);
-    cc::Build::new()
-        .cpp(true)
-        .host(&host)
-        .target(&target)
-	    .std("c++20")
-        .file("Custom/src/lextra.cpp")
-        .file("Custom/src/lflags.cpp")
-        .flag("-DLUA_USE_LONGJMP=1")
-        .flag("-DLUA_API=extern \"C\"")
-        .flag("-DLUACODE_API=extern \"C\"")
-        .flag("-DLUACODEGEN_API=extern \"C\"")
-        .flag("-DLUAI_MAXCSTACK=1000000")
-        .flag("-DLUA_UTAG_LIMIT=128") 
-        .flag("-DLUA_LUTAG_LIMIT=128") 
-        .flag_if_supported("-fexceptions")
-        .include("lute/extern/luau/VM/include")
-        .include("lute/extern/luau/VM/src")
-        .include("lute/extern/luau/Common/include")
-        .include("lute/extern/luau/Compiler/include")
-        .static_crt(true)
-        .out_dir(&prebuilts_dir)
-        .compile("Luau.Custom");
-
+    
+    build_cc_lute_lib(
+        lcfg,
+        "Luau.Custom",
+        vec!["Custom/src/lextra.cpp".to_string(), "Custom/src/lflags.cpp".to_string()]
+    );
+    
     // Also build LuteExt
     println!("Building Luau.LuteExt for target: {}", target);
-    let mut build = cc::Build::new();
 
-    build
-        .host(&host)
-        .target(&target)
-        .cpp(true)
-	    .std("c++20")
-        .file("LuteExt/src/lopen.cpp")
-        .include("lute/lute/cli/include")
-        .include("lute/lute/crypto/include")
-        .include("lute/lute/fs/include")
-        .include("lute/lute/luau/include")
-        .include("lute/lute/net/include")
-        .include("lute/lute/process/include")
-        .include("lute/lute/system/include")
-        .include("lute/lute/vm/include")
-        .include("lute/lute/task/include")
-        .include("lute/lute/time/include")
-        .include("lute/lute/runtime/include")
-        .include("lute/extern/luau/VM/include")
-        .include("lute/extern/luau/VM/src")
-        .include("lute/extern/luau/Common/include")
-        .include("lute/extern/luau/Compiler/include")
-        .include("lute/extern/libuv/include")
-        .flag("-DLUA_USE_LONGJMP=1")
-        .flag("-DLUA_API=extern \"C\"")
-        .flag("-DLUACODE_API=extern \"C\"")
-        .flag("-DLUACODEGEN_API=extern \"C\"")
-        .flag("-DLUAI_MAXCSTACK=1000000")
-        .flag("-DLUA_UTAG_LIMIT=128")
-        .flag("-DLUA_LUTAG_LIMIT=128")
-        .flag_if_supported(
-            "-fexceptions" // Enable C++ exceptions on non-Windows
-        ); 
-        
-    if lcfg.disable_net {
-        build.flag("-DLUTE_DISABLE_NET=1");
-    }
+    build_cc_lute_lib(
+        lcfg,
+        "Luau.LuteExt",
+        vec!["LuteExt/src/lopen.cpp".to_string()]
+    );
 
-    if lcfg.disable_crypto {
-        build.flag("-DLUTE_DISABLE_CRYPTO=1");
-    }
-
-    build
-        .static_crt(true)
-        .out_dir(&prebuilts_dir)
-        .compile("Luau.LuteExt");
-
-    let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-    let mut dst = Config::new("lute")
-        .profile("Release") // Debug builds tend to be extremely slow and nearly unusable in practice
-        .define("LUAU_EXTERN_C", "ON") // Provides DLUA_USE_LONGJMP, DLUA_API, LUACODE_API, LUACODEGEN_API
-        .define("LUAU_STATIC_CRT", "ON")
-        .define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreaded$<$<CONFIG:Debug>:Debug>") // Use static CRT for MSVC
-        .define("LUAU_BUILD_STATIC", "ON")
-        .define("LUTE_DISABLE_NET", if lcfg.disable_net { "ON" } else { "OFF" } )
-        .define("LUTE_DISABLE_CRYPTO", if lcfg.disable_crypto { "ON" } else { "OFF" }  )
-        .cxxflag("-DLUAI_MAXCSTACK=1000000")
-        .cxxflag("-DLUA_UTAG_LIMIT=128")
-        .cxxflag("-DLUA_LUTAG_LIMIT=128") 
-        .cxxflag("-DLUA_USE_LONGJMP=1") // Use longjmp for error handling
-        .cxxflag(
-            "-fexceptions" // Enable C++ exceptions on non-Windows
-        )
-        .init_cxx_cfg(config)
-        .no_build_target(true)
-        .static_crt(true)
-        .target(&target)
-        .build();
-    }));
-
-    match err {
-        Ok(_) => {},
-        Err(e) => {
-            // Most cases will hit this, in this case, check that we've finished configuring
-            if let Some(downcast) = e.downcast_ref::<&str>() {
-                println!("{:?}", downcast);
-            } else if let Some(downcast) = e.downcast_ref::<String>() {
-                println!("{:?}", downcast);
-            } {
-                panic!("Lute prebuilt build failed");
-            }
-        }
-    }
+    let dst = setup_lute_cmake(lcfg);
 
     // Now copy the final output files to the prebuilts directory/{target}/staticlibs
     //

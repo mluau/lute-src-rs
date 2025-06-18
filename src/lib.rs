@@ -1,6 +1,7 @@
 use lute_src_rs_common::{
     cmake::Config,
-    finalize::finalize_build
+    finalize::finalize_build,
+    commonflags::{build_cc_lute_lib, setup_lute_cmake}
 };
 pub use lute_src_rs_common::LConfig;
 use std::env::current_dir;
@@ -165,112 +166,21 @@ pub fn build_lute(lcfg: LConfig) {
     }
 
     // Configure C++
-    let mut config = cc::Build::new();
-    config
-        .warnings(false)
-        .cargo_metadata(true)
-        .std("c++20")
-        .cpp(true)
-        .static_crt(true);
-
-    let target = std::env::var("TARGET").unwrap();
-
-    if target.ends_with("emscripten") {
-        // Enable c++ exceptions for emscripten (it's disabled by default)
-        // Later we should switch to wasm exceptions
-        config.flag_if_supported("-fexceptions");
-    }
-
-    let mut dst = Config::new("lute")
-        .profile("Release") // Debug builds tend to be extremely slow and nearly unusable in practice
-        .define("LUAU_EXTERN_C", "ON") // Provides DLUA_USE_LONGJMP, DLUA_API, LUACODE_API, LUACODEGEN_API
-        .define("LUAU_STATIC_CRT", "ON")
-        .define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreaded$<$<CONFIG:Debug>:Debug>") // Use static CRT for MSVC
-        .define("LUAU_BUILD_STATIC", "ON")
-        .define("LUTE_DISABLE_NET", if lcfg.disable_net { "ON" } else { "OFF" } )
-        .define("LUTE_DISABLE_CRYPTO", if lcfg.disable_crypto { "ON" } else { "OFF" }  )
-        .cxxflag("-DLUAI_MAXCSTACK=1000000")
-        .cxxflag("-DLUA_UTAG_LIMIT=128")
-        .cxxflag("-DLUA_LUTAG_LIMIT=128") 
-        .cxxflag("-DLUA_USE_LONGJMP=1") // Use longjmp for error handling
-        .cxxflag(
-            "-fexceptions" // Enable C++ exceptions on non-Windows
-        )
-        .init_cxx_cfg(config)
-        .no_build_target(true)
-        .static_crt(true)
-        .build();
+    let dst = setup_lute_cmake(lcfg);
 
     // Custom is a special library that needs to be built manually and linked in as well
-    cc::Build::new()
-        .cpp(true)
-	    .std("c++20")
-        .file("Custom/src/lextra.cpp")
-        .file("Custom/src/lflags.cpp")
-        .flag("-DLUA_USE_LONGJMP=1")
-        .flag("-DLUA_API=extern \"C\"")
-        .flag("-DLUACODE_API=extern \"C\"")
-        .flag("-DLUACODEGEN_API=extern \"C\"")
-        .flag("-DLUAI_MAXCSTACK=1000000")
-        .flag("-DLUA_UTAG_LIMIT=128") 
-        .flag("-DLUA_LUTAG_LIMIT=128") 
-        .flag_if_supported(
-            "-fexceptions" // Enable C++ exceptions on non-Windows
-        )
-        .include("lute/extern/luau/VM/include")
-        .include("lute/extern/luau/VM/src")
-        .include("lute/extern/luau/Common/include")
-        .include("lute/extern/luau/Compiler/include")
-        .static_crt(true)
-        .compile("Luau.Custom");
-
+    build_cc_lute_lib(
+        lcfg,
+        "Luau.Custom",
+        vec!["Custom/src/lextra.cpp".to_string(), "Custom/src/lflags.cpp".to_string()]
+    );
+    
     // Also build LuteExt
-
-    let mut build = cc::Build::new();
-
-    build
-        .cpp(true)
-	    .std("c++20")
-        .file("LuteExt/src/lopen.cpp")
-        .include("lute/lute/cli/include")
-        .include("lute/lute/crypto/include")
-        .include("lute/lute/fs/include")
-        .include("lute/lute/luau/include")
-        .include("lute/lute/net/include")
-        .include("lute/lute/process/include")
-        .include("lute/lute/system/include")
-        .include("lute/lute/vm/include")
-        .include("lute/lute/task/include")
-        .include("lute/lute/time/include")
-        .include("lute/lute/runtime/include")
-        .include("lute/extern/luau/VM/include")
-        .include("lute/extern/luau/VM/src")
-        .include("lute/extern/luau/Common/include")
-        .include("lute/extern/luau/Compiler/include")
-        .include("lute/extern/libuv/include")
-        .flag("-DLUA_USE_LONGJMP=1")
-        .flag("-DLUA_API=extern \"C\"")
-        .flag("-DLUACODE_API=extern \"C\"")
-        .flag("-DLUACODEGEN_API=extern \"C\"")
-        .flag("-DLUAI_MAXCSTACK=1000000")
-        .flag("-DLUA_UTAG_LIMIT=128")
-        .flag("-DLUA_LUTAG_LIMIT=128")
-        .flag_if_supported(
-            "-fexceptions" // Enable C++ exceptions on non-Windows
-        );
-        
-    if lcfg.disable_net {
-        build.flag("-DLUTE_DISABLE_NET=1");
-    }
-
-    if lcfg.disable_crypto {
-        build.flag("-DLUTE_DISABLE_CRYPTO=1");
-    }
-
-    build
-        .flag("-fexceptions")
-        .static_crt(true)
-        .compile("Luau.LuteExt");
+    build_cc_lute_lib(
+        lcfg,
+        "Luau.LuteExt",
+        vec!["LuteExt/src/lopen.cpp".to_string()]
+    );
 
     println!("cargo:rustc-link-search=native={}/build", dst.display());
     
