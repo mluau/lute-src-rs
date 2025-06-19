@@ -155,7 +155,7 @@ pub struct lutec_setupState {
 // Populates function pointers in the given lutec_setupState.
 pub type lutec_setupState_init = unsafe extern "C" fn(config: *mut lutec_setupState);
 
-#[cfg(not(target_os = "emscripten"))]
+#[cfg(all(feature = "codegen", not(target_os = "emscripten")))]
 extern "C" {
     pub fn luau_codegen_supported() -> c_int;
     pub fn luau_codegen_create(state: *mut c_void);
@@ -218,7 +218,7 @@ mod tests {
             assert!(!state.is_null());
 
             // Enable JIT if supported
-            #[cfg(not(target_os = "emscripten"))]
+            #[cfg(all(feature = "codegen", not(target_os = "emscripten")))]
             if luau_codegen_supported() != 0 {
                 luau_codegen_create(state);
             }
@@ -243,7 +243,7 @@ mod tests {
             free(bytecode.cast());
 
             // Compile the function (JIT, if supported)
-            #[cfg(not(target_os = "emscripten"))]
+            #[cfg(all(feature = "codegen", not(target_os = "emscripten")))]
             if luau_codegen_supported() != 0 {
                 luau_codegen_compile(state, -1);
             }
@@ -271,7 +271,7 @@ mod tests {
             println!("gettop: {}", lua_gettop(state));
 
             // Enable JIT if supported
-            #[cfg(not(target_os = "emscripten"))]
+            #[cfg(all(feature = "codegen", not(target_os = "emscripten")))]
             if luau_codegen_supported() != 0 {
                 luau_codegen_create(state);
             }
@@ -334,7 +334,7 @@ mod tests {
             free(bytecode.cast());
 
             // Compile the function (JIT, if supported)
-            #[cfg(not(target_os = "emscripten"))]
+            #[cfg(all(feature = "codegen", not(target_os = "emscripten")))]
             if luau_codegen_supported() != 0 {
                 luau_codegen_compile(state, -1);
             }

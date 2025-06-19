@@ -18,8 +18,6 @@ fn does_lute_exist(cmd: &str) -> bool {
 }
 
 pub fn build_lute(lcfg: LConfig) {
-    println!("cargo:rustc-env=LUAU_VERSION=0.677"); // TODO: Update when needed
-
     // Switch directory to CARGO_MANIFEST_DIR
     std::env::set_current_dir(env!("CARGO_MANIFEST_DIR")).unwrap();
     // This is needed to run the luthier.py script
