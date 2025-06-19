@@ -228,11 +228,7 @@ dependencies = [
 [[package]]
 name = "lute-src-rs-common"
 version = "0.1.0"
-<<<<<<< HEAD
 source = "git+https://github.com/mluau/lute-src-rs-common#7d2e37462c15fd95baafbc222511366f2da16f13"
-=======
-source = "git+https://github.com/mluau/lute-src-rs-common#9089be39dfdc8995e2873a09cd7062ce95319c91"
->>>>>>> 68beca2927d7124184c3dbf699ed2fff5a7cf491
 dependencies = [
  "cc",
 ]
