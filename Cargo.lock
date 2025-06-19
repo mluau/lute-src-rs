@@ -10,9 +10,9 @@ checksum = "1b8e56985ec62d17e9c1001dc89c88ecd7dc08e47eba5ec7c29c7b5eeecde967"
 
 [[package]]
 name = "cc"
-version = "1.2.21"
+version = "1.2.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8691782945451c1c383942c4874dbe63814f61cb57ef773cda2972682b7bb3c0"
+checksum = "d487aa071b5f64da6f19a3e848e3578944b726ee5a4854b82172f02aa876bfdc"
 dependencies = [
  "jobserver",
  "libc",
@@ -197,9 +197,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.173"
+version = "0.2.174"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8cfeafaffdbc32176b64fb251369d52ea9f0a8fbc6f8759edffef7b525d64bb"
+checksum = "1171693293099992e19cddea4e8b849964e9846f4acee11b3948bcc337be8776"
 
 [[package]]
 name = "libgit2-sys"
@@ -256,15 +256,24 @@ checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 [[package]]
 name = "lute-prebuilts-chooser"
 version = "0.1.0"
-source = "git+https://github.com/mluau/lute-prebuilts-chooser#98655d66bd042def20e4906fec5317950a689340"
+source = "git+https://github.com/mluau/lute-prebuilts-chooser#63acd13acb959f928d1500b6228dc031ff2f671a"
 dependencies = [
  "lute-prebuilts-linux",
+ "lute-prebuilts-windows",
 ]
 
 [[package]]
 name = "lute-prebuilts-linux"
 version = "0.1.0"
-source = "git+https://github.com/mluau/lute-prebuilts-linux#bc16461661f6ec36c4be6238b4f8d7d90667305a"
+source = "git+https://github.com/mluau/lute-prebuilts-linux#a992303db027d772413de19c577c2c068de95103"
+dependencies = [
+ "lute-src-rs-common",
+]
+
+[[package]]
+name = "lute-prebuilts-windows"
+version = "0.1.0"
+source = "git+https://github.com/mluau/lute-prebuilts-windows#db60f398e968a9c8cde2e0e4761ebe996fed27ab"
 dependencies = [
  "lute-src-rs-common",
 ]
@@ -281,7 +290,7 @@ dependencies = [
 [[package]]
 name = "lute-src-rs-common"
 version = "0.1.0"
-source = "git+https://github.com/mluau/lute-src-rs-common#921fb316c39f4fe79f7b731657bf038e3e255999"
+source = "git+https://github.com/mluau/lute-src-rs-common#7d2e37462c15fd95baafbc222511366f2da16f13"
 dependencies = [
  "cc",
 ]
