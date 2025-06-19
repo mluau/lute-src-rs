@@ -85,20 +85,22 @@ pub fn build_lute(lcfg: LConfig) {
     }
 
     // Configure C++
-    let dst = setup_lute_cmake(lcfg);
+    let dst = setup_lute_cmake(lcfg, false);
 
     // Custom is a special library that needs to be built manually and linked in as well
     build_cc_lute_lib(
         lcfg,
         "Luau.Custom",
-        vec!["Custom/src/lextra.cpp".to_string(), "Custom/src/lflags.cpp".to_string()]
+        vec!["Custom/src/lextra.cpp".to_string(), "Custom/src/lflags.cpp".to_string()],
+        false, // Not a prebuilt
     );
     
     // Also build LuteExt
     build_cc_lute_lib(
         lcfg,
         "Luau.LuteExt",
-        vec!["LuteExt/src/lopen.cpp".to_string()]
+        vec!["LuteExt/src/lopen.cpp".to_string()],
+        false, // Not a prebuilt
     );
 
     println!("cargo:rustc-link-search=native={}/build", dst.display());

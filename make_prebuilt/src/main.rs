@@ -264,28 +264,14 @@ pub fn build_lute_prebuilt(lcfg: LConfig, target: &str, os: &str) {
         std::fs::File::create(lute_done_path).expect("Failed to create .done_luthier file");
     }
 
-    // Configure C++
-    let mut config = cc::Build::new();
-    config
-        .warnings(false)
-        .cargo_metadata(true)
-        .std("c++20")
-        .target(&target)
-        .cpp(true);
-
-    if target.ends_with("emscripten") {
-        // Enable c++ exceptions for emscripten (it's disabled by default)
-        // Later we should switch to wasm exceptions
-        config.flag_if_supported("-fexceptions");
-    }
-
     // Custom is a special library that needs to be built manually and linked in as well
     println!("Building Luau.Custom for target: {}", target);
     
     build_cc_lute_lib(
         lcfg,
         "Luau.Custom",
-        vec!["Custom/src/lextra.cpp".to_string(), "Custom/src/lflags.cpp".to_string()]
+        vec!["Custom/src/lextra.cpp".to_string(), "Custom/src/lflags.cpp".to_string()],
+        true // prebuilt
     );
     
     // Also build LuteExt
@@ -294,10 +280,11 @@ pub fn build_lute_prebuilt(lcfg: LConfig, target: &str, os: &str) {
     build_cc_lute_lib(
         lcfg,
         "Luau.LuteExt",
-        vec!["LuteExt/src/lopen.cpp".to_string()]
+        vec!["LuteExt/src/lopen.cpp".to_string()],
+        true // prebuilt
     );
 
-    let dst = setup_lute_cmake(lcfg);
+    let dst = setup_lute_cmake(lcfg, true);
 
     // Now copy the final output files to the prebuilts directory/{target}/staticlibs
     //
