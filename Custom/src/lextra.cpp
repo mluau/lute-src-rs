@@ -2,6 +2,7 @@
 #include "lapi.h"
 #include "lobject.h"
 #include "lstate.h"
+#include "lgc.h"
 
 extern "C" const void* lua_getmetatablepointer(lua_State* L, int objindex)
 {
@@ -18,4 +19,13 @@ extern "C" const void* lua_getmetatablepointer(lua_State* L, int objindex)
     default:
         return NULL;
     }
+}
+
+extern "C" const char* lua_gcstatename(int state)
+{
+    return luaC_statename(state);
+}
+
+extern "C" int64_t lua_gcallocationrate(lua_State* L) {
+    return luaC_allocationrate(L);
 }
